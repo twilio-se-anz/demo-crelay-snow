@@ -4,6 +4,11 @@ const ExpressWs = require('express-ws');
 
 const app = express();
 const initialPort = process.env.PORT || 3000;
+// Extract all the .env variables here
+const { SERVER_URL } = process.env;
+const { TWILIO_FUNCTIONS_URL } = process.env;
+const { OPENAI_API_KEY } = process.env;
+const { OPENAI_MODEL } = process.env;
 
 // Initialize express-ws
 ExpressWs(app);
@@ -45,11 +50,11 @@ app.get('/', (req, res) => {
 });
 
 // Start the server
-app.listen(initialPort, () => {
-    console.log(`Server is running on port ${initialPort}`);
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 }).on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
-        console.error(`Port ${initialPort} is already in use`);
+        console.error(`Port ${PORT} is already in use`);
     } else {
         console.error('Failed to start server:', error);
     }
