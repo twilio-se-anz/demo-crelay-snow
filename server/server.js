@@ -3,7 +3,7 @@ const express = require('express');
 const ExpressWs = require('express-ws');
 
 const app = express();
-const initialPort = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 // Extract all the .env variables here
 const { SERVER_URL } = process.env;
 const { TWILIO_FUNCTIONS_URL } = process.env;
@@ -14,11 +14,8 @@ const { OPENAI_MODEL } = process.env;
 ExpressWs(app);
 
 // WebSocket endpoint
-app.ws('/', (ws, req) => {
-    console.log('New client connected');
-
-    // Send welcome message
-    ws.send(JSON.stringify({ type: 'connection', message: 'Connected to server' }));
+app.ws('/', (ws) => {
+    console.log('New websocket established');
 
     // Handle incoming messages
     ws.on('message', (data) => {
