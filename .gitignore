@@ -11,3 +11,4 @@ functions/pnpm-lock.yaml
 functions/.twiliodeployinfo
 functions/.env
 functions/.nvmrc
+.DS_Store
