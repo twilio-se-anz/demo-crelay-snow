@@ -1,4 +1,13 @@
+# Node Websocket server
 server/pnpm-lock.yaml
 server/node_modules/.modules.yaml
 server/node_modules
 server/.env
+
+# Twilio functions
+functions/node_modules
+functions/package-lock.json
+functions/pnpm-lock.yaml
+functions/.twiliodeployinfo
+functions/.env
+functions/.nvmrc
