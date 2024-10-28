@@ -57,6 +57,9 @@ app.ws('/conversation-relay', async (ws) => {
             const message = JSON.parse(data);
             console.log(`[Conversation Relay] Message received: ${JSON.stringify(message, null, 4)}`);
             switch (message.type) {
+                case 'info':
+                    console.debug(`[Conversation Relay] info: ${JSON.stringify(message, null, 4)}`)
+                    break;
                 case 'prompt':
                     // OpenAI Model
                     console.info(`[Conversation Relay] >>>>>>: ${message.voicePrompt}`);
