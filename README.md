@@ -17,7 +17,7 @@ This project consists of two main components:
 .
 ├── server/          # WebSocket server for conversation relay
 │   └── .env        # Server environment variables
-└── functions/       # Twilio Serverless Functions
+└── serverless/       # Twilio Serverless Functions
     ├── .env        # Twilio credentials and phone numbers
     ├── assets/
     │   ├── context.md           # GPT conversation context
@@ -54,13 +54,13 @@ ngrok http --domain server-des.ngrok.dev 3001
 
 ## Twilio Functions Component
 
-The functions component contains Twilio Serverless Functions for customer verification and various tools.
+The serverless component contains Twilio Serverless Functions for customer verification and various tools.
 
 ### Running the Functions
 
-1. Navigate to the functions directory:
+1. Navigate to the serverless directory:
 ```bash
-cd functions
+cd serverless
 ```
 
 2. Install dependencies:
@@ -73,9 +73,9 @@ pnpm install
 twilio serverless:start
 ```
 
-4. Expose the functions using ngrok:
+4. Expose the serverless using ngrok:
 ```bash
-ngrok http --domain functions-des.ngrok.dev 3000
+ngrok http --domain serverless-des.ngrok.dev 3000
 ```
 
 ## Twilio Configuration
@@ -127,7 +127,7 @@ The server uses two key files to configure the GPT conversation context:
 
 ### context.md
 
-Located in `functions/assets/context.md`, this file defines:
+Located in `serverless/assets/context.md`, this file defines:
 - The AI assistant's persona (Joules, an energy company phone operator)
 - Conversation style guidelines
 - Response formatting rules
@@ -143,7 +143,7 @@ Key sections to configure:
 
 ### toolManifest.json
 
-Located in `functions/assets/toolManifest.json`, this file defines the available tools for the GPT service:
+Located in `serverless/assets/toolManifest.json`, this file defines the available tools for the GPT service:
 
 1. `get-customer`
    - Retrieves customer details using caller's phone number
@@ -167,9 +167,9 @@ The server fetches both files during initialization to hydrate the GPT context a
 
 The project requires two separate environment configuration files:
 
-### Functions Environment Variables (functions/.env)
+### Functions Environment Variables (serverless/.env)
 
-Create a `.env` file in the functions directory with the following variables:
+Create a `.env` file in the serverless directory with the following variables:
 
 ```bash
 # Twilio Account Credentials

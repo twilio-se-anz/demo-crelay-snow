@@ -5,10 +5,12 @@ server/node_modules
 server/.env
 
 # Twilio functions
-functions/node_modules
-functions/package-lock.json
-functions/pnpm-lock.yaml
-functions/.twiliodeployinfo
-functions/.env
-functions/.nvmrc
+serverless/node_modules
+serverless/package-lock.json
+serverless/pnpm-lock.yaml
+serverless/.twiliodeployinfo
 .DS_Store
+serverless/.env
+serverless/.nvmrc
+serverless/package-lock.json
+serverless/pnpm-lock.yaml
