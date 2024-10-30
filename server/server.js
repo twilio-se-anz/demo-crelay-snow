@@ -31,24 +31,9 @@ async function fetchContextAndManifest() {
 // 
 // WebSocket endpoint
 //
-app.ws('/conversation-relay', async (ws) => {
+app.ws('/conversation-relay', (ws) => {
     console.log('New Conversation Relay websocket established');
-
-    // Fetch the Context and Manifest configuration
-    let promptContext, toolManifest;
-    try {
-        ({ promptContext, toolManifest } = await fetchContextAndManifest());
-        console.log('Context and manifest successfully fetched');
-    } catch (error) {
-        console.error('Error fetching context or manifest:', error);
-        ws.close();
-        return;
-    }
-
-        // Initialise the GptService with the fetched context and manifest
-    const gptService = new GptService(promptContext, toolManifest);
-    console.log('3) GptService initialised with Context and Manifest, back in server.js');
-
+    let gptService = null;
 
     // Handle incoming messages
     ws.on('message', async (data) => {
@@ -99,6 +84,12 @@ app.ws('/conversation-relay', async (ws) => {
                     // console.debug(`[Conversation Relay] Setup message received: ${JSON.stringify(message, null, 4)}`);
                     // Log out the to and from phone numbers
                     console.log(`4) [Conversation Relay] Setup message. Call from: ${message.from} to: ${message.to} with call SID: ${message.callSid}`);
+                    
+                    // Initialize GptService with context and manifest
+                    const { promptContext, toolManifest } = await fetchContextAndManifest();
+                    gptService = new GptService(promptContext, toolManifest);
+                    console.log('GptService initialized with Context and Manifest');
+                    
                     // extract the "from" value and pass it to gptService
                     gptService.setCallParameters(message.to, message.from, message.callSid);
 
@@ -116,6 +107,7 @@ app.ws('/conversation-relay', async (ws) => {
                     // Create a greeting message using the person's name
                     const customerData = await getCustomerResponse.json();
                     const customerName = customerData.firstName;
+
                     // console.log(`[Conversation Relay] Customer name: ${customerName}`);
                     const greetingText = `Greet the customer with name ${customerName} in a friendly manner. Do not constantly use their name, but drop it in occasionally. Tell them that you have to fist verify their details before you can proceed to ensure confidentiality of the conversation.`;
                     gptResponse = await gptService.generateResponse('system', greetingText);

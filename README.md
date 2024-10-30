@@ -121,6 +121,32 @@ ngrok http --domain serverless-des.ngrok.dev 3000
    - Returns customer details for personalization
    - Enables the conversation to proceed with verified customer context
 
+### Important Note on WebSocket Implementation
+
+⚠️ **Warning**: When implementing async/await with WebSocket connections, be careful about where you place your await statements. Do not use await in the main WebSocket connection handler (app.ws part). Instead, ensure all async operations are handled within the message event handler (ws.on("message")). This is crucial because:
+
+1. WebSocket connections are synchronous by nature
+2. Using await in the main connection handler could cause you to miss messages
+3. Example of correct implementation:
+
+```javascript
+// INCORRECT - Don't do this
+app.ws('/conversation-relay', async (ws, req) => {
+    await someAsyncOperation(); // This could cause missed messages
+    ws.on('message', (msg) => {
+        // Handle message
+    });
+});
+
+// CORRECT - Do this instead
+app.ws('/conversation-relay', (ws, req) => {
+    ws.on('message', async (msg) => {
+        await someAsyncOperation(); // Safe to use await here
+        // Handle message
+    });
+});
+```
+
 ## GPT Context Configuration
 
 The server uses two key files to configure the GPT conversation context:
