@@ -49,7 +49,7 @@ pnpm dev
 
 4. Expose the server using ngrok:
 ```bash
-ngrok http --domain server-des.ngrok.dev 3001
+ngrok http --domain server-yourdomain.ngrok.dev 3001
 ```
 
 ## Twilio Functions Component
@@ -75,7 +75,7 @@ twilio serverless:start
 
 4. Expose the serverless using ngrok:
 ```bash
-ngrok http --domain serverless-des.ngrok.dev 3000
+ngrok http --domain serverless-yourdomain.ngrok.dev 3000
 ```
 
 ## Twilio Configuration
@@ -88,7 +88,7 @@ ngrok http --domain serverless-des.ngrok.dev 3000
 <Response>
    <Connect>
       <ConversationRelay 
-         url="wss://server-des.ngrok.dev/conversation-relay" 
+         url="wss://server-yourdomain.ngrok.dev/conversation-relay" 
          voice="en-AU-Neural2-A" 
          dtmfDetection="true" 
          interruptByDtmf="true" 
@@ -101,7 +101,7 @@ ngrok http --domain serverless-des.ngrok.dev 3000
 
 ### WebSocket Connection Flow
 
-1. When a call is received, Twilio initiates a WebSocket connection to `wss://server-des.ngrok.dev/conversation-relay`
+1. When a call is received, Twilio initiates a WebSocket connection to `wss://server-yourdomain.ngrok.dev/conversation-relay`
 2. The server receives a 'setup' message containing call details:
    - Caller's phone number (`from`)
    - Called number (`to`)

@@ -10,10 +10,10 @@ exports.handler = async function (context, event, callback) {
 
     console.log(`[getCustomer] Phone number provided:`, caller);
 
-    // You would replace this with actual logic (e.g., database lookup)
+    // Pull customer data from environment variables
     const customerData = {
-      firstname: "Des",
-      lastname: "Hartman"
+      firstname: context.CUSTOMER_NAME,
+      lastname: context.CUSTOMER_LASTNAME
     }
     console.log(`[getCustomer] customer returned:`, customerData);
     return callback(null, customerData);
