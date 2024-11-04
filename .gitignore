@@ -3,6 +3,7 @@ server/pnpm-lock.yaml
 server/node_modules/.modules.yaml
 server/node_modules
 server/.env
+server/fly.toml
 
 # Twilio functions
 serverless/node_modules
@@ -14,3 +15,4 @@ serverless/.env
 serverless/.nvmrc
 serverless/package-lock.json
 serverless/pnpm-lock.yaml
+
