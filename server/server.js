@@ -99,12 +99,7 @@ app.ws('/conversation-relay', (ws) => {
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        // body: JSON.stringify({ from: message.from }),    // Temp hack for alignment.
-                        body: JSON.stringify({ 
-                            call: {
-                                from_number: message.from 
-                            }
-                        }),
+                        body: JSON.stringify({ from: message.from }),    // Temp hack for alignment.
                     });
 
                     // console.log(`[Conversation Relay] Get Customer Response: ${getCustomerResponse}`);
