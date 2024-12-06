@@ -4,14 +4,17 @@ const ExpressWs = require('express-ws');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const SILENCE_SECONDS_THRESHOLD = 5; // The maximum time in seconds that the server will wait for user input from Twilio before sending a reminder message
+const SILENCE_RETRY_THRESHOLD = 3; // The maximum number of times the server will request user input
 // Extract all the .env variables here
 const { TWILIO_FUNCTIONS_URL } = process.env;
 
 // Initialize express-ws
 ExpressWs(app);
 
-// Import the GptService class
+// Import the services
 const { GptService } = require('./services/GptService');
+const { SilenceHandler } = require('./services/SilenceHandler');
 
 // Function to fetch context and manifest
 async function fetchContextAndManifest() {
@@ -34,20 +37,27 @@ async function fetchContextAndManifest() {
 app.ws('/conversation-relay', (ws) => {
     console.log('New Conversation Relay websocket established');
     let gptService = null;
+    let silenceHandler = null;
 
     // Handle incoming messages
     ws.on('message', async (data) => {
         let gptResponse = "";
         try {
             const message = JSON.parse(data);
-            console.log(`[Conversation Relay] Message received: ${JSON.stringify(message, null, 4)}`);
+            // console.log(`[Conversation Relay] Message received: ${JSON.stringify(message, null, 4)}`);
+            
+            // Reset silence timer based on message type if handler exists
+            if (silenceHandler) {
+                silenceHandler.resetTimer(message.type);
+            }
+
             switch (message.type) {
                 case 'info':
-                    console.debug(`[Conversation Relay] info: ${JSON.stringify(message, null, 4)}`)
+                    // console.debug(`[Conversation Relay] INFO: ${JSON.stringify(message, null, 4)}`);
                     break;
                 case 'prompt':
                     // OpenAI Model
-                    console.info(`[Conversation Relay] >>>>>>: ${message.voicePrompt}`);
+                    console.info(`[Conversation Relay:] PROMPT >>>>>>: ${message.voicePrompt}`);
                     gptResponse = await gptService.generateResponse('user', message.voicePrompt);
                     console.info(`[Conversation Relay] JSON <<<<<<: ${JSON.stringify(gptResponse, null, 4)}`);
                     // Send the response back to the WebSocket client
@@ -55,7 +65,7 @@ app.ws('/conversation-relay', (ws) => {
                     break;
                 case 'interrupt':
                     // Handle interrupt message
-                    console.info(`[Conversation Relay] Interrupt ...... : ${message.utteranceUntilInterrupt}`);
+                    console.info(`[Conversation Relay] INTERRUPT ...... : ${message.utteranceUntilInterrupt}`);
                     break;
                 case 'dtmf':
                     // Handle DTMF digits. We are just logging them out for now.
@@ -83,7 +93,7 @@ app.ws('/conversation-relay', (ws) => {
                      */
                     // console.debug(`[Conversation Relay] Setup message received: ${JSON.stringify(message, null, 4)}`);
                     // Log out the to and from phone numbers
-                    console.log(`4) [Conversation Relay] Setup message. Call from: ${message.from} to: ${message.to} with call SID: ${message.callSid}`);
+                    console.log(`4) [Conversation Relay] SETUP. Call from: ${message.from} to: ${message.to} with call SID: ${message.callSid}`);
                     
                     // Initialize GptService with context and manifest
                     const { promptContext, toolManifest } = await fetchContextAndManifest();
@@ -111,9 +121,16 @@ app.ws('/conversation-relay', (ws) => {
                     // console.log(`[Conversation Relay] Customer name: ${customerName}`);
                     const greetingText = `Greet the customer with name ${customerName} in a friendly manner. Do not constantly use their name, but drop it in occasionally. Tell them that you have to fist verify their details before you can proceed to ensure confidentiality of the conversation.`;
                     gptResponse = await gptService.generateResponse('system', greetingText);
-                    console.info(`[Conversation Relay] Setup <<<<<<: ${JSON.stringify(gptResponse, null, 4)}`);
+                    console.info(`[Conversation Relay] SETUP <<<<<<: ${JSON.stringify(gptResponse, null, 4)}`);
                     // Send the response back to the WebSocket client
                     ws.send(JSON.stringify(gptResponse));
+
+                    // Initialize and start silence monitoring after setup is complete
+                    silenceHandler = new SilenceHandler(SILENCE_SECONDS_THRESHOLD, SILENCE_RETRY_THRESHOLD);
+                    silenceHandler.startMonitoring((silenceMessage) => {
+                        console.log(`[Conversation Relay] Sending silence breaker message: ${JSON.stringify(silenceMessage)}`);
+                        ws.send(JSON.stringify(silenceMessage));
+                    });
                     break;
                 default:
                     console.log(`[Conversation Relay] Unknown message type: ${message.type}`);
@@ -126,6 +143,10 @@ app.ws('/conversation-relay', (ws) => {
     // Handle client disconnection
     ws.on('close', () => {
         console.log('Client disconnected');
+        // Clean up the silence handler if it exists
+        if (silenceHandler) {
+            silenceHandler.cleanup();
+        }
     });
 
     // Handle errors
@@ -142,7 +163,7 @@ app.get('/', (req, res) => {
 });
 
 // Start the server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 }).on('error', (error) => {
     if (error.code === 'EADDRINUSE') {

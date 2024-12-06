@@ -52,6 +52,39 @@ pnpm dev
 ngrok http --domain server-yourdomain.ngrok.dev 3001
 ```
 
+## Silence Handling
+
+The system includes a robust silence detection mechanism to manage periods of inactivity during conversations. This functionality is implemented in the `SilenceHandler` class and operates based on two key thresholds:
+
+- `SILENCE_SECONDS_THRESHOLD` (5 seconds): The duration of silence before triggering a reminder
+- `SILENCE_RETRY_THRESHOLD` (3 attempts): Maximum number of reminders before ending the call
+
+### How It Works
+
+1. **Initialization**: Silence monitoring starts after the initial setup message, ensuring the system is ready for conversation.
+
+2. **Message Tracking**:
+   - The system tracks the time since the last meaningful message
+   - Info-type messages are intentionally ignored to prevent false resets
+   - Valid messages (prompt, interrupt, dtmf) reset both the timer and retry counter
+
+3. **Response Sequence**:
+   - After 5 seconds of silence: Sends a reminder message ("I'm sorry, I didn't catch that...")
+   - Each reminder increments a retry counter
+   - After 3 unsuccessful attempts: Ends the call with an "unresponsive" reason code
+
+4. **Cleanup**: The system properly cleans up monitoring resources when the call ends or disconnects.
+
+### Implementation Details
+
+The silence handling is modular and follows separation of concerns:
+- `SilenceHandler` class manages the logic independently
+- Messages are passed back to the server via callbacks
+- The server maintains control of WebSocket communication
+- Thresholds are configurable through constants in server.js
+
+This design ensures reliable conversation flow while preventing indefinite silence periods, improving the overall user experience.
+
 ## Twilio Functions Component
 
 The serverless component contains Twilio Serverless Functions for customer verification and various tools.
