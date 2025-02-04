@@ -1,32 +1,34 @@
 require('dotenv').config();
 const express = require('express');
 const ExpressWs = require('express-ws');
+const fs = require('fs').promises;
+const path = require('path');
+
 
 const app = express();
+ExpressWs(app);     // Initialize express-ws
+app.use(express.urlencoded({ extended: true }));    // For Twilio url encoded body
+app.use(express.json());    // For JSON payloads
+
 const PORT = process.env.PORT || 3000;
-const SILENCE_SECONDS_THRESHOLD = 5; // The maximum time in seconds that the server will wait for user input from Twilio before sending a reminder message
+const SILENCE_SECONDS_THRESHOLD = 15; // The maximum time in seconds that the server will wait for user input from Twilio before sending a reminder message
 const SILENCE_RETRY_THRESHOLD = 3; // The maximum number of times the server will request user input
 // Extract all the .env variables here
 const { TWILIO_FUNCTIONS_URL } = process.env;
-
-// Initialize express-ws
-ExpressWs(app);
 
 // Import the services
 const { GptService } = require('./services/GptService');
 const { SilenceHandler } = require('./services/SilenceHandler');
 
-// Function to fetch context and manifest
+// Function to load context and manifest from local files
 async function fetchContextAndManifest() {
     try {
-        const context = await fetch(`${TWILIO_FUNCTIONS_URL}/context.md`);
-        const promptContext = await context.text();
-        const manifest = await fetch(`${TWILIO_FUNCTIONS_URL}/toolManifest.json`);
-        const toolManifest = await manifest.json(); // Parse JSON response
-        console.log(`[Server] Fetched context and manifest from ${TWILIO_FUNCTIONS_URL}`);
+        const promptContext = await fs.readFile(path.join(__dirname, 'assets', 'context.md'), 'utf8');
+        const toolManifest = JSON.parse(await fs.readFile(path.join(__dirname, 'assets', 'toolManifest.json'), 'utf8'));
+        console.log(`[Server] Loaded context and manifest from local files`);
         return { promptContext, toolManifest };
     } catch (error) {
-        console.error('Error fetching context or manifest:', error);
+        console.log(`[Server], Error loading context or manifest: ${error}`);
         throw error;
     }
 }
@@ -42,10 +44,12 @@ app.ws('/conversation-relay', (ws) => {
     // Handle incoming messages
     ws.on('message', async (data) => {
         let gptResponse = "";
+        let gptService = null;
+
         try {
             const message = JSON.parse(data);
             // console.log(`[Conversation Relay] Message received: ${JSON.stringify(message, null, 4)}`);
-            
+
             // Reset silence timer based on message type if handler exists
             if (silenceHandler) {
                 silenceHandler.resetTimer(message.type);
@@ -56,12 +60,9 @@ app.ws('/conversation-relay', (ws) => {
                     // console.debug(`[Conversation Relay] INFO: ${JSON.stringify(message, null, 4)}`);
                     break;
                 case 'prompt':
-                    // OpenAI Model
                     console.info(`[Conversation Relay:] PROMPT >>>>>>: ${message.voicePrompt}`);
-                    gptResponse = await gptService.generateResponse('user', message.voicePrompt);
-                    console.info(`[Conversation Relay] JSON <<<<<<: ${JSON.stringify(gptResponse, null, 4)}`);
-                    // Send the response back to the WebSocket client
-                    ws.send(JSON.stringify(gptResponse));
+                    gptService.generateResponse('user', message.voicePrompt);
+                    // event emitter established in "setup" will send the response back to the WebSocket client
                     break;
                 case 'interrupt':
                     // Handle interrupt message
@@ -94,12 +95,12 @@ app.ws('/conversation-relay', (ws) => {
                     // console.debug(`[Conversation Relay] Setup message received: ${JSON.stringify(message, null, 4)}`);
                     // Log out the to and from phone numbers
                     console.log(`4) [Conversation Relay] SETUP. Call from: ${message.from} to: ${message.to} with call SID: ${message.callSid}`);
-                    
+
                     // Initialize GptService with context and manifest
                     const { promptContext, toolManifest } = await fetchContextAndManifest();
                     gptService = new GptService(promptContext, toolManifest);
                     console.log('GptService initialized with Context and Manifest');
-                    
+
                     // extract the "from" value and pass it to gptService
                     gptService.setCallParameters(message.to, message.from, message.callSid);
 
@@ -112,7 +113,7 @@ app.ws('/conversation-relay', (ws) => {
                         body: JSON.stringify({ from: message.from }),    // Temp hack for alignment.
                     });
 
-                    // console.log(`[Conversation Relay] Get Customer Response: ${getCustomerResponse}`);
+                    console.log(`[Conversation Relay] Get Customer Response: ${JSON.stringify(getCustomerResponse, null, 4)}`);
 
                     // Create a greeting message using the person's name
                     const customerData = await getCustomerResponse.json();
@@ -120,10 +121,13 @@ app.ws('/conversation-relay', (ws) => {
 
                     // console.log(`[Conversation Relay] Customer name: ${customerName}`);
                     const greetingText = `Greet the customer with name ${customerName} in a friendly manner. Do not constantly use their name, but drop it in occasionally. Tell them that you have to fist verify their details before you can proceed to ensure confidentiality of the conversation.`;
-                    gptResponse = await gptService.generateResponse('system', greetingText);
-                    console.info(`[Conversation Relay] SETUP <<<<<<: ${JSON.stringify(gptResponse, null, 4)}`);
-                    // Send the response back to the WebSocket client
-                    ws.send(JSON.stringify(gptResponse));
+
+                    gptService.generateResponse('system', greetingText);
+
+                    // When receiving the emitted event send the response back to the WebSocket client
+                    gptService.on('llm.content', (data) => {
+                        ws.send(JSON.stringify(data));
+                    });
 
                     // Initialize and start silence monitoring after setup is complete
                     silenceHandler = new SilenceHandler(SILENCE_SECONDS_THRESHOLD, SILENCE_RETRY_THRESHOLD);
@@ -147,6 +151,8 @@ app.ws('/conversation-relay', (ws) => {
         if (silenceHandler) {
             silenceHandler.cleanup();
         }
+        // Remove the event listener
+        this.gptService.removeAllListeners('llm.content');
     });
 
     // Handle errors
@@ -173,3 +179,4 @@ const server = app.listen(PORT, () => {
     }
     process.exit(1);
 });
+
