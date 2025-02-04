@@ -1,22 +1,47 @@
 const OpenAI = require('openai');
 const EventEmitter = require('events');
+const fs = require('fs').promises;
+const path = require('path');
 require('dotenv').config();
 
 const { TWILIO_FUNCTIONS_URL } = process.env;
 const { OPENAI_API_KEY } = process.env;
 const { OPENAI_MODEL } = process.env;
 
-class GptService extends EventEmitter {
-    constructor(promptContext, toolManifest) {
+class OpenAIService extends EventEmitter {
+    constructor() {
         super();
         this.openai = new OpenAI();
         this.model = OPENAI_MODEL;
-        this.messages = [
-            { role: "system", content: promptContext },
-        ];
-        this.toolManifest = toolManifest.tools || [];
+        this.messages = [];
+        this.toolManifest = [];
         this.isInterrupted = false;
-        // console.log(`[GptService] Initialized with model: ${this.messages} and tool manifest: ${JSON.stringify(this.toolManifest, null, 4)}`);
+        this.promptContext = '';
+    }
+
+    // Static method to create and initialize an OpenAIService instance
+    static async initialize() {
+        const instance = new OpenAIService();
+        await instance.loadContextAndManifest();
+        return instance;
+    }
+
+    // Load context and manifest from local files
+    async loadContextAndManifest() {
+        try {
+            this.promptContext = await fs.readFile(path.join(__dirname, '..', 'assets', 'context.md'), 'utf8');
+            const toolManifestData = JSON.parse(await fs.readFile(path.join(__dirname, '..', 'assets', 'toolManifest.json'), 'utf8'));
+
+            this.messages = [
+                { role: "system", content: this.promptContext },
+            ];
+            this.toolManifest = toolManifestData.tools || [];
+
+            console.log(`[OpenAIService] Loaded context and manifest from local files`);
+        } catch (error) {
+            console.error(`[OpenAIService] Error loading context or manifest: ${error}`);
+            throw error;
+        }
     }
 
     setCallParameters(to, from, callSid) {
@@ -24,7 +49,7 @@ class GptService extends EventEmitter {
         this.customerNumber = from;
         this.callSid = callSid;
 
-        console.log(`[GptService] Call to: ${this.twilioNumber} from: ${this.customerNumber} with call SID: ${this.callSid}`);
+        console.log(`[OpenAIService] Call to: ${this.twilioNumber} from: ${this.customerNumber} with call SID: ${this.callSid}`);
         this.messages.push({
             role: 'system',
             content: `The customer phone number or "from" number is ${this.customerNumber}, the callSid is ${this.callSid} and the number to send SMSs from is: ${this.twilioNumber}. Use this information throughout as the reference when calling any of the tools. Specifically use the callSid when you use the "transfer-to-agent" tool to transfer the call to the agent`
@@ -32,9 +57,9 @@ class GptService extends EventEmitter {
     }
 
     async executeToolCall(toolCall) {
-        console.log(`[GptService] Executing tool call: ${JSON.stringify(toolCall, null, 4)}`);
+        console.log(`[OpenAIService] Executing tool call: ${JSON.stringify(toolCall, null, 4)}`);
         const { name, arguments: args } = toolCall.function;
-        console.log(`[GptService] Executing tool call: ${name} with args: ${args}`);
+        console.log(`[OpenAIService] Executing tool call: ${name} with args: ${args}`);
 
         switch (name) {
             case "live-agent-handoff":
@@ -70,7 +95,7 @@ class GptService extends EventEmitter {
         }
 
         try {
-            // console.log(`[GptService] Executing tool ${name} with args: ${args} to path: ${TWILIO_FUNCTIONS_URL}/tools/${name}`);
+            // console.log(`[OpenAIService] Executing tool ${name} with args: ${args} to path: ${TWILIO_FUNCTIONS_URL}/tools/${name}`);
             const functionResponse = await fetch(`${TWILIO_FUNCTIONS_URL}/tools/${name}`, {
                 method: 'POST',
                 headers: {
@@ -81,7 +106,7 @@ class GptService extends EventEmitter {
 
             return await functionResponse.json();
         } catch (error) {
-            console.error(`[GptService] Error executing tool ${name}:`, error);
+            console.error(`[OpenAIService] Error executing tool ${name}:`, error);
             throw error;
         }
     }
@@ -257,4 +282,4 @@ class GptService extends EventEmitter {
     }
 }
 
-module.exports = { GptService };
+module.exports = { OpenAIService };
