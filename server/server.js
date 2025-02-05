@@ -27,126 +27,72 @@ const { TwilioService } = require('./services/twilioService');
  ****************************************************/
 
 app.ws('/conversation-relay', (ws) => {
-    console.log('New Conversation Relay websocket established');
-    let OpenAIService = null;
-    let silenceHandler = null;
+
+    let sessionConversationRelay = null;
+    let sessionData = {};
 
     // Handle incoming messages
     ws.on('message', async (data) => {
-        let gptResponse = "";
-        let OpenAIService = null;
-
         try {
             const message = JSON.parse(data);
-            // console.log(`[Conversation Relay] Message received: ${JSON.stringify(message, null, 4)}`);
+            // logOut('WS', `Received message of type: ${message.type}`);
 
-            // Reset silence timer based on message type if handler exists
-            if (silenceHandler) {
-                silenceHandler.resetTimer(message.type);
+            // Initialize connection on setup message and strap in the Conversation Relay and associated LLM Service
+            if (message.type === 'setup') {
+                logOut('WS', `################################ SETUP START ############################################`);
+
+                // Create new response Service.
+                logOut('WS', `Creating Response Service`);
+                const sessionResponseService = new OpenAIService();
+
+                logOut('WS', `Creating ConversationRelayService`);
+                sessionConversationRelay = new ConversationRelayService(sessionResponseService);
+
+                // Add the Conversation Relay "setup" message data to the sessionCData
+                sessionData.setupData = message;
+                sessionData.customerData = {};  // Add any Customer data here
+
+                // Now handle the setup message in Conversation Relay
+                sessionConversationRelay.setupMessage(sessionData);
+
+                // Send event messages from the Conversation Relay back to the WS client
+                sessionConversationRelay.on('conversationRelay.outgoingMessage', (outgoingMessage) => {
+                    // logOut('WS', `Sending message out: ${JSON.stringify(outgoingMessage)}`);
+                    ws.send(JSON.stringify(outgoingMessage));
+                });
+
+                logOut('WS', `###########################  SETUP COMPLETE #######################################`);
+                return;
             }
 
-            switch (message.type) {
-                case 'info':
-                    // console.debug(`[Conversation Relay] INFO: ${JSON.stringify(message, null, 4)}`);
-                    break;
-                case 'prompt':
-                    console.info(`[Conversation Relay:] PROMPT >>>>>>: ${message.voicePrompt}`);
-                    OpenAIService.generateResponse('user', message.voicePrompt);
-                    // event emitter established in "setup" will send the response back to the WebSocket client
-                    break;
-                case 'interrupt':
-                    // Handle interrupt message
-                    console.info(`[Conversation Relay] INTERRUPT ...... : ${message.utteranceUntilInterrupt}`);
-                    break;
-                case 'dtmf':
-                    // Handle DTMF digits. We are just logging them out for now.
-                    console.debug(`[Conversation Relay] DTMF: ${message.digit}`);
-                    break;
-                case 'setup':
-                    /**
-                     * Handle setup message. Just logging sessionId out for now.
-                     * This is the object received from Twilio:
-                     * {
-                            "type": "setup",
-                            "sessionId": "VXxxxx",
-                            "callSid": "CAxxxx",
-                            "parentCallSid": "",
-                            "from": "+614nnnn",
-                            "to": "+612nnnn",
-                            "forwardedFrom": "+612nnnnn",
-                            "callerName": "",
-                            "direction": "inbound",
-                            "callType": "PSTN",
-                            "callStatus": "RINGING",
-                            "accountSid": "ACxxxxxx",
-                            "applicationSid": null
-                        }
-                     */
-                    // console.debug(`[Conversation Relay] Setup message received: ${JSON.stringify(message, null, 4)}`);
-                    // Log out the to and from phone numbers
-                    console.log(`4) [Conversation Relay] SETUP. Call from: ${message.from} to: ${message.to} with call SID: ${message.callSid}`);
+            // ALL Other messages are sent to Conversation Relay
+            sessionConversationRelay.incomingMessage(message);
 
-                    // Initialize OpenAIService
-                    OpenAIService = await OpenAIService.initialize();
-                    console.log('OpenAIService initialized');
-
-                    // extract the "from" value and pass it to OpenAIService
-                    OpenAIService.setCallParameters(message.to, message.from, message.callSid);
-
-                    // Call the get-customer service via fetch
-                    const getCustomerResponse = await fetch(`${TWILIO_FUNCTIONS_URL}/tools/get-customer`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ from: message.from }),    // Temp hack for alignment.
-                    });
-
-                    console.log(`[Conversation Relay] Get Customer Response: ${JSON.stringify(getCustomerResponse, null, 4)}`);
-
-                    // Create a greeting message using the person's name
-                    const customerData = await getCustomerResponse.json();
-                    const customerName = customerData.firstName;
-
-                    // console.log(`[Conversation Relay] Customer name: ${customerName}`);
-                    const greetingText = `Greet the customer with name ${customerName} in a friendly manner. Do not constantly use their name, but drop it in occasionally. Tell them that you have to fist verify their details before you can proceed to ensure confidentiality of the conversation.`;
-
-                    OpenAIService.generateResponse('system', greetingText);
-
-                    // When receiving the emitted event send the response back to the WebSocket client
-                    OpenAIService.on('llm.content', (data) => {
-                        ws.send(JSON.stringify(data));
-                    });
-
-                    // Initialize and start silence monitoring after setup is complete
-                    silenceHandler = new SilenceHandler(SILENCE_SECONDS_THRESHOLD, SILENCE_RETRY_THRESHOLD);
-                    silenceHandler.startMonitoring((silenceMessage) => {
-                        console.log(`[Conversation Relay] Sending silence breaker message: ${JSON.stringify(silenceMessage)}`);
-                        ws.send(JSON.stringify(silenceMessage));
-                    });
-                    break;
-                default:
-                    console.log(`[Conversation Relay] Unknown message type: ${message.type}`);
-            };
         } catch (error) {
-            console.error('[Conversation Relay] Error in message handling:', error);
+            logError('WS', `Error in websocket message handling: ${error}`);
         }
     });
 
     // Handle client disconnection
     ws.on('close', () => {
-        console.log('Client disconnected');
-        // Clean up the silence handler if it exists
-        if (silenceHandler) {
-            silenceHandler.cleanup();
+        logOut('WS', 'Client ws disconnected');
+        // Clean up ConversationRelay and its listeners
+        if (sessionConversationRelay) {
+            sessionConversationRelay.cleanup();
         }
-        // Remove the event listener
-        this.OpenAIService.removeAllListeners('llm.content');
+        // Remove WebSocket listeners
+        ws.removeAllListeners();
     });
 
     // Handle errors
     ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
+        logError('WS', `WebSocket error: ${error}`);
+        // Clean up ConversationRelay and its listeners
+        if (sessionConversationRelay) {
+            sessionConversationRelay.cleanup();
+        }
+        // Remove WebSocket listeners
+        ws.removeAllListeners();
     });
 });
 
@@ -158,6 +104,32 @@ app.ws('/conversation-relay', (ws) => {
 // Basic HTTP endpoint
 app.get('/', (req, res) => {
     res.send('WebSocket Server Running');
+});
+
+app.post('/connectConversationRelay', async (req, res) => {
+    // Extract and use this body:  body: {customerReference, serverBaseUrl}
+
+    logOut('Server', `Received request to connect to Conversation Relay`);
+    const twilioService = new TwilioService();
+    const serverBaseUrl = process.env.SERVER_BASE_URL;
+    const twiml = twilioService.connectConversationRelay("customerReference123", serverBaseUrl);
+    res.send(twiml.toString());
+});
+
+
+app.post('/tool', async (req, res) => {       // TODO: Temp tool route. Remove later 
+    // Extract and use this body:  body: {name: toolName,arguments: toolArguments,     }
+    const { name, arguments } = req.body;
+    logOut('Server', `Received request to run tool: ${name} with arguments: ${arguments}`);
+    // TODO: Execute the tools
+    switch (name) {
+        case 'sendSMS':
+            const { to, message } = arguments;
+            const twilioServiceSMS = new TwilioService();
+            twilioServiceSMS.sendSMS(to, message);
+        default:
+            res.status(404).send('Tool not found');
+    }
 });
 
 

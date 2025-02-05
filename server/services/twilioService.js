@@ -78,6 +78,22 @@ class TwilioService {
             return null;
         }
     }
+
+    async sendSMS(to, message) {
+        try {
+            logOut('TwilioService', `Sending SMS to: ${to} with message: ${message}`);
+
+            const message = await this.twilioClient.messages.create({
+                body: message,
+                from: this.fromNumber,
+                to: to
+            });
+            return message.sid;
+        } catch (error) {
+            logError('TwilioService', `Error sending SMS: ${error}`);
+            return null;
+        }
+    }
 }
 
 module.exports = { TwilioService };

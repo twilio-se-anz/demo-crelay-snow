@@ -3,61 +3,18 @@
         {
             "type": "function",
             "function": {
-                "name": "get-customer",
-                "description": "Retrieves customer details based on the call 'from' information",
+                "name": "end-call",
+                "description": "end this call now",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "from": {
+                        "conversationSummary": {
                             "type": "string",
-                            "description": "The phone number of the customer (caller)"
+                            "description": "A summary of the call"
                         }
                     },
                     "required": [
-                        "from"
-                    ]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "verify-code",
-                "description": "Verifies a provided code against the calling number",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "code": {
-                            "type": "string",
-                            "description": "The verification code to check"
-                        },
-                        "from": {
-                            "type": "string",
-                            "description": "The calling number to verify against"
-                        }
-                    },
-                    "required": [
-                        "code",
-                        "from"
-                    ]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "verify-send",
-                "description": "Generates and sends a verification code via SMS to the phone number provided",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "from": {
-                            "type": "string",
-                            "description": "The calling phone number to send the verification code to. This is the number the call came in from."
-                        }
-                    },
-                    "required": [
-                        "from"
+                        "conversationSummary"
                     ]
                 }
             }
@@ -70,13 +27,51 @@
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "callSid": {
+                        "summary": {
                             "type": "string",
-                            "description": "The unique identifier of the call to be transferred"
+                            "description": "As summary of the call"
                         }
                     },
                     "required": [
-                        "callSid"
+                        "summary"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "send-dtmf",
+                "description": "This sends DTMF tones to the call",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dtmfDigit": {
+                            "type": "string",
+                            "description": "The DTMF digit value to send"
+                        }
+                    },
+                    "required": [
+                        "dtmfDigit"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "send-sms",
+                "description": "This sends DTMF tones to the call",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dtmfDigit": {
+                            "type": "string",
+                            "description": "The DTMF digit value to send"
+                        }
+                    },
+                    "required": [
+                        "dtmfDigit"
                     ]
                 }
             }

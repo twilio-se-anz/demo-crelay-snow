@@ -1,39 +1,71 @@
 /**
- * SilenceHandler Class
+ * @class SilenceHandler
+ * @description Manages silence detection and automated responses during voice conversations.
+ * This class implements a sophisticated silence monitoring system that:
  * 
- * Manages silence detection and response during voice conversations. This class monitors
- * the duration of silence (no messages received) and triggers appropriate responses based
- * on configurable thresholds.
+ * 1. Continuously monitors the duration of silence (periods without messages)
+ * 2. Implements a progressive response system:
+ *    - First reminder: "Still there?" after initial silence threshold
+ *    - Second reminder: "Just checking you are still there?" after continued silence
+ *    - Call termination: After exceeding maximum retry attempts
+ * 3. Automatically resets monitoring when valid messages are received
+ * 4. Provides proper cleanup of resources when monitoring ends
  * 
- * Features:
- * - Tracks duration of silence since last message
- * - Ignores info-type messages to prevent false resets
- * - Sends reminder messages when silence threshold is reached
- * - Ends call after maximum retry attempts
- * - Provides cleanup for proper resource management
+ * The handler uses an interval-based timer that checks every second for silence duration,
+ * comparing it against configurable thresholds. When thresholds are exceeded, it triggers
+ * either reminder messages or call termination through a callback system.
+ * 
+ * @property {number} silenceSecondsThreshold - Seconds of silence before triggering response (default: 20)
+ * @property {number} silenceRetryThreshold - Maximum reminder attempts before ending call (default: 3)
+ * @property {number} lastMessageTime - Timestamp of the last received message
+ * @property {NodeJS.Timeout} silenceTimer - Interval timer for silence monitoring
+ * @property {number} silenceRetryCount - Current count of silence reminder attempts
+ * @property {Function} messageCallback - Callback function for handling silence responses
  * 
  * @example
- * const silenceHandler = new SilenceHandler(5, 3);
+ * // Initialize and start silence monitoring
+ * const silenceHandler = new SilenceHandler();
+ * 
  * silenceHandler.startMonitoring((message) => {
- *   // Handle message (e.g., send to WebSocket)
+ *   switch(message.type) {
+ *     case 'end':
+ *       // Handle call termination due to silence
+ *       console.log('Call ended:', message.handoffData);
+ *       break;
+ *     case 'text':
+ *       // Handle silence reminder message
+ *       console.log('Silence reminder:', message.token);
+ *       break;
+ *   }
  * });
  * 
- * // Reset timer when valid message received
- * silenceHandler.resetTimer('prompt');
+ * // Reset timer when valid messages are received
+ * silenceHandler.resetTimer();
  * 
- * // Cleanup when done
+ * // Cleanup resources when done
  * silenceHandler.cleanup();
+ * 
+ * @see Message Types:
+ * - 'text': Reminder messages with progressive content
+ * - 'end': Call termination message with reason data
+ * - 'info': System messages (ignored for silence detection)
+ * - 'prompt': Interactive prompts (resets silence timer)
  */
+
+const { logOut, logError } = require('../utils/logger');
+
+const {
+    SILENCE_SECONDS_THRESHOLD = 20,
+    SILENCE_RETRY_THRESHOLD = 3
+} = process.env;
+
 class SilenceHandler {
     /**
      * Creates a new SilenceHandler instance.
-     * 
-     * @param {number} silenceSecondsThreshold - Seconds of silence before triggering a reminder
-     * @param {number} silenceRetryThreshold - Maximum number of reminder attempts before ending call
      */
-    constructor(silenceSecondsThreshold, silenceRetryThreshold) {
-        this.silenceSecondsThreshold = silenceSecondsThreshold;
-        this.silenceRetryThreshold = silenceRetryThreshold;
+    constructor() {
+        this.silenceSecondsThreshold = SILENCE_SECONDS_THRESHOLD;
+        this.silenceRetryThreshold = SILENCE_RETRY_THRESHOLD;
         this.lastMessageTime = null;
         this.silenceTimer = null;
         this.silenceRetryCount = 0;
@@ -61,10 +93,20 @@ class SilenceHandler {
      * @returns {Object} Message object with text type and reminder content
      */
     createSilenceBreakerMessage() {
-        return {
-            type: 'text',
-            text: "I'm sorry, I didn't catch that. Could you please repeat that?"
-        };
+        // Select a different silence breaker message depending how many times you have asked
+        if (this.silenceRetryCount === 1) {
+            return {
+                type: 'text',
+                token: "Still there?",
+                last: true
+            };
+        } else if (this.silenceRetryCount === 2) {
+            return {
+                type: 'text',
+                token: "Just checking you are still there?",
+                last: true
+            };
+        }
     }
 
     /**
@@ -73,21 +115,19 @@ class SilenceHandler {
      * @param {Function} onMessage - Callback function to handle messages
      */
     startMonitoring(onMessage) {
-        console.log("[Silence Monitor] Starting silence monitoring");
         this.lastMessageTime = Date.now();
         this.messageCallback = onMessage;
-        
+
         this.silenceTimer = setInterval(() => {
             const silenceTime = (Date.now() - this.lastMessageTime) / 1000; // Convert to seconds
-            console.log(`[Silence Monitor] Current silence duration: ${silenceTime.toFixed(1)} seconds`);
             if (silenceTime >= this.silenceSecondsThreshold) {
                 this.silenceRetryCount++;
-                console.log(`[Silence Monitor] SILENCE BREAKER - No messages for ${this.silenceSecondsThreshold}+ seconds (Retry count: ${this.silenceRetryCount}/${this.silenceRetryThreshold})`);
+                logOut('Silence', `SILENCE BREAKER - No messages for ${this.silenceSecondsThreshold}+ seconds (Retry count: ${this.silenceRetryCount}/${this.silenceRetryThreshold})`);
 
                 if (this.silenceRetryCount >= this.silenceRetryThreshold) {
                     // End the call if we've exceeded the retry threshold
                     clearInterval(this.silenceTimer);
-                    console.log("[Silence Monitor] Ending call due to exceeding silence retry threshold");
+                    // logOut('Silence', 'Ending call due to exceeding silence retry threshold');
                     if (this.messageCallback) {
                         this.messageCallback(this.createEndCallMessage());
                     }
@@ -105,20 +145,15 @@ class SilenceHandler {
 
     /**
      * Resets the silence timer when a valid message is received.
-     * Ignores info-type messages to prevent false resets.
-     * 
-     * @param {string} messageType - Type of message received
      */
-    resetTimer(messageType) {
-        if (this.lastMessageTime !== null && messageType !== 'info') {
+    resetTimer() {
+        if (this.lastMessageTime !== null) {
             this.lastMessageTime = Date.now();
             // Reset the retry count when we get a valid message
             this.silenceRetryCount = 0;
-            console.log(`[Silence Monitor] Timer and retry count reset due to ${messageType} message`);
-        } else if (messageType === 'info') {
-            console.log("[Silence Monitor] Info message received - Ignoring for timer reset");
+            // logOut('Silence', 'Timer and retry count reset');
         } else {
-            console.log("[Silence Monitor] Message received but monitoring not yet started");
+            // logOut('Silence', 'Message received but monitoring not yet started');
         }
     }
 
@@ -127,7 +162,7 @@ class SilenceHandler {
      */
     cleanup() {
         if (this.silenceTimer) {
-            console.log("[Silence Monitor] Cleaning up silence monitor");
+            logOut('Silence', 'Cleaning up silence monitor');
             clearInterval(this.silenceTimer);
             this.messageCallback = null;
         }
