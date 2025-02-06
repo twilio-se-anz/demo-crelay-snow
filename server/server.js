@@ -11,6 +11,7 @@ const express = require('express');
 const ExpressWs = require('express-ws');
 const app = express();
 const PORT = process.env.PORT || 3000;
+let serverBaseUrl = process.env.SERVER_BASE_URL || "localhost"; // Store server URL
 ExpressWs(app);     // Initialize express-ws
 
 app.use(express.urlencoded({ extended: true }));    // For Twilio url encoded body
@@ -21,10 +22,14 @@ const { logOut, logError } = require('./utils/logger');
 // Import the services
 const { ConversationRelayService } = require('./services/ConversationRelayService');
 const { OpenAIService } = require('./services/OpenAIService');
-const { TwilioService } = require('./services/twilioService');
+const { TwilioService } = require('./services/TwilioService');
 
-
-
+/**
+ * This customerDataMap illustrates how you would pass data via Conversation Relay Parameters.
+ * The intention is to store and get data via this map per WS session
+ * TODO: Can this be per WS session?
+ */
+let customerDataMap = new Map();
 
 /****************************************************
  * 
@@ -68,10 +73,14 @@ app.ws('/conversation-relay', (ws) => {
             if (!sessionConversationRelay) {
                 logOut('WS', `Session Conversation Relay being initialised`);
 
-                // Since this is the first message from CR, it will be a setup message, so add the Conversation Relay "setup" message data to the sessionCData
-                logOut('WS', `Adding setup CR setup message data to sessionData. Message type: ${message.type}`);
+                // Since this is the first message from CR, it will be a setup message, so add the Conversation Relay "setup" message data to the session.
+                logOut('WS', `Adding setup CR setup message data to sessionData. Message type: ${message.type} and customerReference: ${message.customParameters?.customerReference}`);
+
+                // This extracts the data from the customerDataMap and adds it to the sessionData
+                sessionCustomerData = customerDataMap.get(message.customParameters.customerReference);
+
                 sessionData.setupData = message;
-                sessionData.customerData = {};  // Add any Customer data here
+                sessionData.customerData = sessionCustomerData
 
                 // Create new response Service.
                 logOut('WS', `Creating Response Service`);
@@ -137,6 +146,62 @@ app.get('/', (req, res) => {
 });
 
 /**
+ * Initiates an outbound call and connects it to the Conversation Relay via the Twilio Service service. The intention is to provide any amount of data in this request, but
+ * that only the reference will be used to connect to the Conversation Relay. Once the reference is connected via Conversation Relay, it can be used to look up the full data set
+ * stored here again. This illustrates how to pass parameters via the Conversation Relay Parameter field.
+ * 
+ * Call this endpoint with some sample data.
+ * 
+ * ``` terminal
+ * curl  -X POST \
+ *  'https://server-des.ngrok.dev/outboundCall' \
+ *  --header 'Content-Type: application/json' \
+ *  --data-raw '{
+ *      "properties": {
+ *          "phoneNumber": "+1234567890",
+ *          "customerReference": "abc123",
+ *          "firstname": "Bob",
+ *          "lastname": "Jones"
+ *      }
+ *   }'
+ * ```
+ * This data will be stored in a local Map and can be retrieved via the customerReference.
+ * 
+ * @endpoint POST /outboundCall
+ * 
+ * @param {Object} req.body.properties - API request data properties
+ * @param {string} req.body.properties.phoneNumber - [REQUIRED] Call's outbound phone number to call
+ * @param {string} req.body.properties.customerReference - [OPTIONAL] Unique reference to pass along with the call
+ * 
+ * @returns {Object} response
+ * @returns {string} [response.error] - Error message if the call failed
+ * 
+ */
+app.post('/outboundCall', async (req, res) => {
+
+    const requestData = req.body.properties;
+    customerDataMap.set(requestData.customerReference, { requestData });
+
+    try {
+        logOut('Server', `/outboundCall: Initiating outbound call`);
+        const twilioService = new TwilioService();
+
+        const response = await twilioService.makeOutboundCall(
+            requestData.phoneNumber,
+            requestData.customerReference,
+            serverBaseUrl
+        );
+
+        logOut('Server', `/outboundCall: Call initiated with call SID: ${response}`);
+
+        res.json({ success: true, response: response });
+    } catch (error) {
+        logError('Server', `Error initiating outbound call: ${error}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * Initiates a connection to the Conversation Relay service.
  * 
  * @name POST /connectConversationRelay
@@ -151,11 +216,11 @@ app.get('/', (req, res) => {
  */
 app.post('/connectConversationRelay', async (req, res) => {
     // Extract and use this body:  body: {customerReference, serverBaseUrl}
+    const referenceData = req.body.properties;
 
     logOut('Server', `Received request to connect to Conversation Relay`);
     const twilioService = new TwilioService();
-    const serverBaseUrl = process.env.SERVER_BASE_URL;
-    const twiml = twilioService.connectConversationRelay("customerReference123", serverBaseUrl);
+    const twiml = twilioService.connectConversationRelay(referenceData.reference, serverBaseUrl);
     res.send(twiml.toString());
 });
 
