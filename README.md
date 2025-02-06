@@ -253,6 +253,97 @@ These variables are used by the server for:
 
 ## Dependencies
 
+## Outbound Calling
+
+The system supports initiating outbound calls via an API endpoint. This allows external systems to trigger calls that connect to the Conversation Relay service.
+
+### API Endpoint
+
+```
+POST /outboundCall
+```
+
+#### Request Format
+
+```json
+{
+  "properties": {
+    "phoneNumber": "+1234567890",      // [REQUIRED] Destination phone number in E.164 format
+    "customerReference": "abc123",      // [OPTIONAL] Unique reference to associate with the call
+    "firstname": "Bob",                 // [OPTIONAL] Additional customer data
+    "lastname": "Jones"                 // [OPTIONAL] Additional customer data
+  }
+}
+```
+
+#### Example Usage
+
+```bash
+curl -X POST \
+  'https://server-yourdomain.ngrok.dev/outboundCall' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "properties": {
+      "phoneNumber": "+1234567890",
+      "customerReference": "abc123",
+      "firstname": "Bob",
+      "lastname": "Jones"
+    }
+  }'
+```
+
+### Data Flow and Customer Reference
+
+The system uses a customer reference mechanism to maintain context throughout the call lifecycle:
+
+1. **Initial Storage**: When the outbound call endpoint is hit, all provided data is stored in a `customerDataMap` using the customerReference as the key:
+   ```javascript
+   customerDataMap.set(requestData.customerReference, { requestData });
+   ```
+
+2. **Conversation Relay Parameter**: The customerReference is passed to the Conversation Relay service as a parameter:
+   ```javascript
+   conversationRelay.parameter({
+     name: 'customerReference',
+     value: customerReference
+   });
+   ```
+
+3. **WebSocket Session**: When the Conversation Relay establishes the WebSocket connection:
+   - The initial setup message contains the customerReference in customParameters
+   - The server retrieves the stored data using this reference
+   - The data is attached to the session for use throughout the call
+
+This mechanism allows you to:
+- Pass arbitrary data to the call session without size limitations in the Conversation Relay parameters
+- Access the full customer context throughout the call lifecycle
+- Maintain session-specific data storage
+
+### Implementation Details
+
+1. The endpoint stores the provided customer data in a session map using the customerReference as the key
+2. Initiates an outbound call via Twilio using the provided phone number
+3. Connects the call to the Conversation Relay service once established
+4. The customerReference is passed as a parameter to the Conversation Relay, allowing access to the stored customer data during the call
+
+### Response
+
+Success:
+```json
+{
+  "success": true,
+  "response": "CA1234..." // Twilio Call SID
+}
+```
+
+Error:
+```json
+{
+  "success": false,
+  "error": "Error message"
+}
+```
+
 ### Server Dependencies
 - express - Web application framework
 - express-ws - WebSocket support for Express
