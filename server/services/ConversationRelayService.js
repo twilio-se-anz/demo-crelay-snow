@@ -94,7 +94,14 @@ class ConversationRelayService extends EventEmitter {
         // Check the tool call result if for CR specific tool calls, as these need to be sent to the WS server
         this.responseService.on('llm.toolResult', (toolResult) => {
             logOut(`Conversation Relay`, `Tool result received: ${JSON.stringify(toolResult)}`);
-            this.emit('conversationRelay.outgoingMessage', toolResult);
+            // We need to check each of the tool call messages and if this is one of the CR specific messages, we can send, else, nothing. CR specific messages are of type: play, sendDigits, language, end.
+            if (['play', 'sendDigits', 'language', 'end'].includes(toolResult.type)) {
+                // Send the tool result to the WS server
+                this.emit('conversationRelay.outgoingMessage', toolResult);
+            } else {
+                // Do nothing
+                logOut(`Conversation Relay`, `Not a CR specific message, so not sending to WS server ${JSON.stringify(toolResult)}`);
+            }
         });
         logOut(`Conversation Relay`, `Service initialized`);
     }
@@ -115,7 +122,7 @@ class ConversationRelayService extends EventEmitter {
     async setupMessage(sessionData) {
         // Pull out sessionCustomerData parts into own variables
         const { customerData, setupData } = sessionData;
-        this.logMessage = `[Conversation Relay with Call SID: ${setupData.callSid}] `
+        this.logMessage = `Call SID: ${setupData.callSid}] `
 
         // This first system message pushes all the data into the Response Service in preparation for the conversation under generateResponse.
         const initialMessage = `These are all the details of the call: ${JSON.stringify(setupData, null, 4)} and the data needed to complete your objective: ${JSON.stringify(customerData, null, 4)}. Use this to complete your objective`;
