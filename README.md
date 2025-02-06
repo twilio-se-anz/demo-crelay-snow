@@ -15,15 +15,25 @@ This project consists of two main components:
 
 ```
 .
-├── server/          # WebSocket server for conversation relay
-│   └── .env        # Server environment variables
-└── serverless/       # Twilio Serverless Functions
-    ├── .env        # Twilio credentials and phone numbers
-    ├── assets/
-    │   ├── context.md           # GPT conversation context
-    │   └── toolManifest.json    # Available tools configuration
-    └── functions/
-        └── tools/               # Tool implementations
+├── server/                # WebSocket server for conversation relay
+│   ├── .env.example      # Example environment configuration
+│   ├── package.json      # Server dependencies and scripts
+│   ├── server.js         # Main server implementation
+│   ├── assets/           # Configuration assets
+│   │   ├── context.md    # GPT conversation context
+│   │   └── toolManifest.json # Available tools configuration
+│   ├── services/         # Core service implementations
+│   │   ├── ConversationRelayService.js
+│   │   ├── OpenAIService.js
+│   │   ├── SilenceHandler.js
+│   │   └── twilioService.js
+│   ├── tools/           # Tool implementations
+│   │   ├── end-call.js
+│   │   ├── live-agent-handoff.js
+│   │   ├── send-dtmf.js
+│   │   └── send-sms.js
+│   └── utils/           # Utility functions
+│       └── logger.js
 ```
 
 ## Server Component
@@ -113,24 +123,19 @@ ngrok http --domain serverless-yourdomain.ngrok.dev 3000
 
 ## Twilio Configuration
 
-### TwiML Bin Setup
+### Twilio Phone Number Configuration
 
-1. Create a new TwiML Bin in your Twilio console
-2. Add the following TwiML code:
-```xml
-<Response>
-   <Connect>
-      <ConversationRelay 
-         url="wss://server-yourdomain.ngrok.dev/conversation-relay" 
-         voice="en-AU-Neural2-A" 
-         dtmfDetection="true" 
-         interruptByDtmf="true" 
-         debug="true"
-      />
-   </Connect>
-</Response>
-```
-3. Configure your Twilio phone number to use this TwiML Bin for incoming voice calls
+1. Configure your Twilio phone number to point to the "connectConversationRelay" endpoint:
+   - Go to your Twilio Console > Phone Numbers > Active Numbers
+   - Select your phone number
+   - Under "Voice & Fax" > "A Call Comes In"
+   - Set it to "Webhook" and enter:
+     ```
+     https://server-yourdomain.ngrok.dev/connectConversationRelay
+     ```
+   - Method: HTTP POST
+
+This endpoint will handle incoming calls and establish the WebSocket connection for conversation relay.
 
 ### WebSocket Connection Flow
 
@@ -263,11 +268,53 @@ These variables are used by the server for:
 ## Dependencies
 
 ### Server Dependencies
-- express
-- express-ws
-- openai
-- dotenv
+- express - Web application framework
+- express-ws - WebSocket support for Express
+- openai - OpenAI API client for GPT integration
+- dotenv - Environment configuration
+- winston - Logging framework
+- uuid - Unique identifier generation
 
-### Functions Dependencies
-- twilio
-- @twilio/runtime-handler
+### Server Tools
+
+The server includes several built-in tools for call management:
+
+1. `end-call`
+   - Gracefully terminates the current call
+   - Used for normal call completion or error scenarios
+
+2. `live-agent-handoff`
+   - Transfers the call to a human agent
+   - Handles escalation scenarios
+
+3. `send-dtmf`
+   - Sends DTMF tones during the call
+   - Useful for automated menu navigation
+
+4. `send-sms`
+   - Sends SMS messages during the call
+   - Used for verification codes or follow-up information
+
+### Server Services
+
+The server is organized into modular services:
+
+1. `ConversationRelayService`
+   - Manages the core conversation flow
+   - Handles WebSocket communication
+   - Coordinates between different services
+
+2. `OpenAIService`
+   - Manages GPT integration
+   - Handles prompt construction and response processing
+   - Implements retry logic and error handling
+
+3. `SilenceHandler`
+   - Manages silence detection and response
+   - Implements configurable thresholds
+   - Handles conversation flow control
+
+4. `twilioService`
+   - Manages Twilio-specific functionality
+   - Handles call control operations
+   - Implements SMS and DTMF features

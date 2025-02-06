@@ -76,12 +76,13 @@ class ConversationRelayService extends EventEmitter {
      * @param {Object} responseService - LLM service for processing responses
      * @throws {Error} If responseService is not provided
      */
-    constructor(responseService) {
+    constructor(responseService, sessionData) {
         super();
         if (!responseService) {
             throw new Error('LLM service is required');
         }
         this.responseService = responseService;
+        this.sessionData = sessionData;
         this.silenceHandler = new SilenceHandler();
         this.logMessage = null;     // Utility log message
 
@@ -103,7 +104,7 @@ class ConversationRelayService extends EventEmitter {
                 logOut(`Conversation Relay`, `Not a CR specific message, so not sending to WS server ${JSON.stringify(toolResult)}`);
             }
         });
-        logOut(`Conversation Relay`, `Service initialized`);
+        logOut(`Conversation Relay`, `Service constructed`);
     }
 
     /**
@@ -170,26 +171,27 @@ class ConversationRelayService extends EventEmitter {
 
             switch (message.type) {
                 case 'setup':
-                    logOut(`Conversation Relay`, `${this.logMessage} Setup message received in incomingMessage`);
+                    logOut(`Conversation Relay`, `${this.logMessage} SETUP: ${JSON.stringify(message)}`);
+                    this.setupMessage(this.sessionData);
                     break;
                 case 'prompt':
-                    logOut(`Conversation Relay`, `${this.logMessage} PROMPT >>>>>>: ${message.voicePrompt}`);
+                    logOut(`Conversation Relay`, `${this.logMessage} PROMPT ${message.voicePrompt}`);
                     this.responseService.generateResponse('user', message.voicePrompt);
                     break;
                 case 'dtmf':
                     logOut(`Conversation Relay`, `${this.logMessage} DTMF: ${message.digit}`);
                     break;
                 case 'interrupt':
-                    logOut(`Conversation Relay`, `${this.logMessage} INTERRUPT ...... : ${message.utteranceUntilInterrupt}`);
+                    logOut(`Conversation Relay`, `${this.logMessage} ........ INTERRUPT: ${message.utteranceUntilInterrupt}`);
                     break;
                 case 'info':
-                    logOut(`Conversation Relay`, `${this.logMessage} INFO: ${message.info}`);
+                    logOut(`Conversation Relay`, `${this.logMessage} INFO: ${JSON.stringify(message, null, 4)}`);
                     break;
                 case 'error':
                     logOut(`Conversation Relay`, `${this.logMessage} ERROR: ${message.description}`);
                     break;
                 default:
-                    logError(`Conversation Relay`, `${this.logMessage} Unknown message type: "${message.type}"`);
+                    logError(`Conversation Relay`, `${this.logMessage} UNKNOWN: "${message.type}"`);
             }
         } catch (error) {
             logError(`Conversation Relay`, `${this.logMessage} Error in message handling: ${error}`);

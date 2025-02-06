@@ -15,6 +15,6 @@ module.exports = function (functionArguments) {
             reason: functionArguments.summary
         })
     };
-    logOut('LLM', `Transfer to agent response: ${JSON.stringify(response, null, 4)}`);
+    logOut('LiveAgentHandoff', `Transfer to agent response: ${JSON.stringify(response, null, 4)}`);
     return response;
 }

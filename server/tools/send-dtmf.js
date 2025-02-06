@@ -12,6 +12,6 @@ module.exports = function (functionArguments) {
         type: "sendDigits",
         digits: functionArguments.dtmfDigit
     };
-    logOut('LLM', `Send DTMF response: ${JSON.stringify(response, null, 4)}`);
+    logOut('SendDTMF', `Send DTMF response: ${JSON.stringify(response, null, 4)}`);
     return response;
 }

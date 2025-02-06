@@ -18,6 +18,6 @@ module.exports = function (functionArguments) {
             conversationSummary: functionArguments.summary,
         })
     };
-    logOut('LLM', `Ending the call with endResponseContent: ${JSON.stringify(response, null, 4)}`);
+    logOut('EndCall', `Ending the call with endResponseContent: ${JSON.stringify(response, null, 4)}`);
     return response;
 }
