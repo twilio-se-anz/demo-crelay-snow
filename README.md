@@ -1,15 +1,12 @@
 # Simple Conversation Relay
 
-This project consists of two main components:
-- A WebSocket server for handling conversation relay
-- Twilio Serverless Functions for customer verification and tools
+A WebSocket-based conversation relay system that integrates with Twilio for voice calls and OpenAI for natural language processing. The system provides real-time communication handling, silence detection, and automated conversation management.
 
 ## Prerequisites
 
 - Node.js v18
 - pnpm
 - ngrok
-- Twilio CLI with Serverless plugin
 
 ## Project Structure
 
@@ -38,7 +35,7 @@ This project consists of two main components:
 
 ## Server Component
 
-The server handles WebSocket connections and manages conversation relay functionality. It includes GPT service integration and communicates with Twilio Functions.
+The server handles WebSocket connections and manages conversation relay functionality. It includes GPT service integration for natural language processing and Twilio integration for voice call handling.
 
 ### Running the Server
 
@@ -95,31 +92,6 @@ The silence handling is modular and follows separation of concerns:
 
 This design ensures reliable conversation flow while preventing indefinite silence periods, improving the overall user experience.
 
-## Twilio Functions Component
-
-The serverless component contains Twilio Serverless Functions for customer verification and various tools.
-
-### Running the Functions
-
-1. Navigate to the serverless directory:
-```bash
-cd serverless
-```
-
-2. Install dependencies:
-```bash
-pnpm install
-```
-
-3. Start the Twilio Serverless development environment:
-```bash
-twilio serverless:start
-```
-
-4. Expose the serverless using ngrok:
-```bash
-ngrok http --domain serverless-yourdomain.ngrok.dev 3000
-```
 
 ## Twilio Configuration
 
@@ -148,16 +120,11 @@ This endpoint will handle incoming calls and establish the WebSocket connection 
 
 3. The server then:
    - Stores the call parameters for the session
-   - Makes a request to the `get-customer` function with the caller's phone number
-   - Receives customer details (including first name)
-   - Uses this information to generate a personalized greeting
-   - Initiates the verification process
-
-4. The `get-customer` function:
-   - Receives the caller's phone number
-   - Looks up customer information
-   - Returns customer details for personalization
-   - Enables the conversation to proceed with verified customer context
+   - Initializes the ConversationRelayService with:
+     - OpenAI service for natural language processing
+     - Silence handler for managing inactivity
+   - Sets up event listeners for WebSocket communication
+   - Begins processing incoming messages
 
 ### Important Note on WebSocket Implementation
 
@@ -191,8 +158,8 @@ The server uses two key files to configure the GPT conversation context:
 
 ### context.md
 
-Located in `serverless/assets/context.md`, this file defines:
-- The AI assistant's persona (Joules, an energy company phone operator)
+Located in `server/assets/context.md`, this file defines:
+- The AI assistant's persona
 - Conversation style guidelines
 - Response formatting rules
 - Authentication process steps
@@ -203,52 +170,32 @@ Key sections to configure:
 2. Style Guardrails - Set conversation tone and behavior rules
 3. Response Guidelines - Specify formatting and delivery rules
 4. Instructions - Detail specific process steps
-5. Validation - Define the customer verification workflow
 
 ### toolManifest.json
 
-Located in `serverless/assets/toolManifest.json`, this file defines the available tools for the GPT service:
+Located in `server/assets/toolManifest.json`, this file defines the tools available to the OpenAI service. The service implements a dynamic tool loading system where tools are loaded based on their names in the manifest. Each tool's filename in the `/tools` directory must exactly match its name in the manifest.
 
-1. `get-customer`
-   - Retrieves customer details using caller's phone number
-   - Required parameter: `from` (phone number)
+Available tools:
 
-2. `verify-code`
-   - Verifies provided authentication code
-   - Required parameters: `code` and `from`
+1. `end-call`
+   - Gracefully terminates the current call
+   - Used for normal call completion or error scenarios
 
-3. `verify-send`
-   - Sends verification code via SMS
-   - Required parameter: `from`
-
-4. `live-agent-handoff`
-   - Transfers call to human agent
+2. `live-agent-handoff`
+   - Transfers the call to a human agent
    - Required parameter: `callSid`
 
-The server fetches both files during initialization to hydrate the GPT context and enable tool usage during conversations.
+3. `send-dtmf`
+   - Sends DTMF tones during the call
+   - Useful for automated menu navigation
+
+4. `send-sms`
+   - Sends SMS messages during the call
+   - Used for verification codes or follow-up information
+
+The OpenAI service loads these tools during initialization and makes them available for use in conversations through OpenAI's function calling feature.
 
 ## Environment Configuration
-
-The project requires two separate environment configuration files:
-
-### Functions Environment Variables (serverless/.env)
-
-Create a `.env` file in the serverless directory with the following variables:
-
-```bash
-# Twilio Account Credentials
-ACCOUNT_SID=your_twilio_account_sid
-AUTH_TOKEN=your_twilio_auth_token
-
-# Phone Numbers Configuration
-SMS_FROM_NUMBER=your_twilio_sms_number    # Number used to send verification codes
-CALL_FROM_NUMBER=your_twilio_call_number  # Number used for outbound calls
-```
-
-These variables are used by the Twilio Functions for:
-- Authentication with Twilio's API
-- Sending SMS verification codes
-- Making outbound calls
 
 ### Server Environment Variables (server/.env)
 
@@ -256,14 +203,16 @@ Create a `.env` file in the server directory with the following variables:
 
 ```bash
 PORT=3001                                    # Server port number
-TWILIO_FUNCTIONS_URL=your_functions_url      # URL to your deployed Twilio Functions
+SERVER_BASE_URL=your_server_url              # Base URL for your server (e.g., ngrok URL)
 OPENAI_API_KEY=your_openai_api_key          # OpenAI API key for GPT integration
+OPENAI_MODEL=gpt-4-1106-preview             # OpenAI model to use for conversations
 ```
 
 These variables are used by the server for:
 - Configuring the server port
-- Connecting to Twilio Functions
+- Setting the server's base URL for Twilio integration
 - Authenticating with OpenAI's API
+- Specifying the OpenAI model for conversations
 
 ## Dependencies
 
