@@ -1,3 +1,7 @@
+/**
+ * Send SMS function. This is an example of a NON-CR type tool. It should not have any CR specific messages sent back via CR.
+ * 
+ */
 const { logOut, logError } = require('../utils/logger');
 const { TwilioService } = require('../services/twilioService');
 
