@@ -1,7 +1,6 @@
 const { logOut, logError } = require('../utils/logger');
 
-function EndCall(functionArguments) {
-
+module.exports = function (functionArguments) {
     logOut('EndCall', `End call function called with arguments: ${JSON.stringify(functionArguments)}`);
     const response = {
         type: "end",
@@ -13,7 +12,4 @@ function EndCall(functionArguments) {
     };
     logOut('LLM', `Ending the call with endResponseContent: ${JSON.stringify(response, null, 4)}`);
     return response;
-
 }
-
-module.exports = { EndCall }

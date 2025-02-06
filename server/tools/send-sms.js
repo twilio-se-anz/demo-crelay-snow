@@ -1,12 +1,17 @@
 const { logOut, logError } = require('../utils/logger');
-const { twilioService } = require('../services/twilioService');
+const { TwilioService } = require('../services/twilioService');
 
-function SendSMS(functionArguments) {
-
+module.exports = async function (functionArguments) {
     logOut('SendSMS', `Send SMS function called with arguments: ${JSON.stringify(functionArguments)}`);
 
+    const twilioService = new TwilioService();
+
+    logOut('SendSMS', `Sending SMS to: ${functionArguments.to} with message: ${functionArguments.message}`);
+
     // Send the SMS
-    const result = twilioService.sendSMS(functionArguments.to, functionArguments.message);
+    const result = await twilioService.sendSMS(functionArguments.to, functionArguments.message);
+
+    logOut('SendSMS', `SMS sent to with result: ${result}`);
 
     let response = '';
 
@@ -20,5 +25,3 @@ function SendSMS(functionArguments) {
 
     return response;
 }
-
-module.exports = { SendSMS }

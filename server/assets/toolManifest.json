@@ -61,17 +61,22 @@
             "type": "function",
             "function": {
                 "name": "send-sms",
-                "description": "This sends DTMF tones to the call",
+                "description": "This sends an SMS message to the number provided",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "dtmfDigit": {
+                        "to": {
                             "type": "string",
-                            "description": "The DTMF digit value to send"
+                            "description": "The number to send the SMS to. This HAS to be in +1234567890 format"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "The message to be sent"
                         }
                     },
                     "required": [
-                        "dtmfDigit"
+                        "to",
+                        "message"
                     ]
                 }
             }

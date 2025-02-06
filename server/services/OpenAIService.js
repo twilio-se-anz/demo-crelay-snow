@@ -8,6 +8,7 @@ require('dotenv').config();
 let context = fs.readFileSync(path.join(__dirname, '../assets/context.md'), 'utf8');
 const toolManifest = require('../assets/toolManifest.json');
 const { logOut, logError } = require('../utils/logger');
+const { log } = require('console');
 const { OPENAI_API_KEY } = process.env;
 const { OPENAI_MODEL } = process.env;
 
@@ -29,6 +30,7 @@ class OpenAIService extends EventEmitter {
         this.toolDefinitions.forEach((tool) => {
             let functionName = tool.function.name;
             // Dynamically load all tool files
+            // Load the function directly since we're using module.exports = function
             this.loadedTools[functionName] = require(`../tools/${functionName}`);
             logOut(`[OpenAIService]`, `Loaded function: ${functionName}`);
         });
@@ -49,14 +51,15 @@ class OpenAIService extends EventEmitter {
     }
 
     async executeToolCall(tool) {
+        logOut(`[OpenAIService]`, `Executing tool call with tool being: ${JSON.stringify(tool, null, 4)} `);
 
         try {
             let calledTool = this.loadedTools[tool.function.name];
             let calledToolArgs = JSON.parse(tool.function.arguments);
-            logOut(`[OpenAIService]`, `Executing tool call: ${calledTool} with args: ${calledToolArgs}`);
+            logOut(`[OpenAIService]`, `Executing tool call: ${tool.function.name} with args: ${JSON.stringify(calledToolArgs, null, 4)}`);
 
             // Now run the loaded tool
-            let toolResponse = calledTool.calledTool(calledToolArgs);
+            let toolResponse = calledTool(calledToolArgs);
 
             return toolResponse;
         } catch (error) {
@@ -67,7 +70,7 @@ class OpenAIService extends EventEmitter {
 
     async generateResponse(role = 'user', prompt) {
         let fullResponse = '';
-        let toolCallCollector = '';
+        let toolCallCollector = null;
         logOut(`[OpenAIService]`, `Generating response for ${role}: ${prompt}`);
 
         try {
@@ -92,7 +95,6 @@ class OpenAIService extends EventEmitter {
                 const toolCalls = chunk.choices[0]?.delta?.tool_calls;
 
                 if (content) {
-                    logOut(`[OpenAIService]`, `Content: ${content}`);
                     fullResponse += content;
                     this.emit('llm.content', {
                         type: "text",
@@ -101,27 +103,39 @@ class OpenAIService extends EventEmitter {
                     });
                 }
 
-                if (toolCalls) {
-                    for (const toolCall of toolCalls) {
-                        if (toolCall.index === 0) {  // Initialize collector for first chunk
-                            toolCallCollector = {
-                                id: toolCall.id || '',
-                                function: {
-                                    name: '',
-                                    arguments: ''
-                                }
-                            };
-                        }
-                        if (toolCall.function?.name) {
-                            toolCallCollector.function.name = toolCall.function.name;
-                        }
-                        if (toolCall.function?.arguments) {
-                            toolCallCollector.function.arguments += toolCall.function.arguments;
-                        }
+                if (toolCalls && toolCalls.length > 0) {
+                    const toolCall = toolCalls[0];
+
+                    // Initialize collector if this is the first tool call chunk
+                    if (!toolCallCollector) {
+                        toolCallCollector = {
+                            id: toolCall.id || '',
+                            type: "function",
+                            function: {
+                                name: '',
+                                arguments: ''
+                            }
+                        };
+                    }
+
+                    // Store the ID if it's present
+                    if (toolCall.id) {
+                        toolCallCollector.id = toolCall.id;
+                    }
+
+                    // Store the name if it's present
+                    if (toolCall.function?.name) {
+                        toolCallCollector.function.name = toolCall.function.name;
+                    }
+
+                    // Accumulate arguments if they're present
+                    if (toolCall.function?.arguments) {
+                        toolCallCollector.function.arguments += toolCall.function.arguments;
                     }
                 }
 
                 if (chunk.choices[0]?.finish_reason === 'tool_calls' && toolCallCollector) {
+
                     const toolCallObj = {
                         id: toolCallCollector.id,
                         type: "function",
@@ -131,14 +145,18 @@ class OpenAIService extends EventEmitter {
                         }
                     };
 
+                    logOut(`[OpenAIService]`, `#########################  Tool call object: ${JSON.stringify(toolCallObj, null, 4)}`);
+
                     // Execute the tool
                     // const toolResult = await this.executeToolCall(toolCallObj);
                     let toolResult = null;
                     try {
                         let calledTool = this.loadedTools[toolCallObj.function.name];
                         let calledToolArgs = JSON.parse(toolCallObj.function.arguments);
-                        logOut(`[OpenAIService]`, `Executing tool call: ${calledTool} with args: ${calledToolArgs}`);
-                        toolResult = await calledTool.calledTool(calledToolArgs);
+                        logOut(`[OpenAIService]`, `Executing tool call: ${toolCallObj.function.name} with args: ${JSON.stringify(calledToolArgs, null, 4)}`);
+
+                        toolResult = await calledTool(calledToolArgs);
+                        logOut(`[OpenAIService]`, `Tool result: ${JSON.stringify(toolResult, null, 4)}`);
 
                         // Emit the tool result
                         this.emit('llm.toolResult', toolResult);

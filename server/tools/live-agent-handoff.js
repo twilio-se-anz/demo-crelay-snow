@@ -1,6 +1,6 @@
 const { logOut, logError } = require('../utils/logger');
 
-function LiveAgentHandoff(functionArguments) {
+module.exports = function (functionArguments) {
     logOut('LiveAgentHandoff', `LiveAgentHandoff function called with arguments: ${JSON.stringify(functionArguments)}`);
     const response = {
         type: "end",
@@ -11,7 +11,4 @@ function LiveAgentHandoff(functionArguments) {
     };
     logOut('LLM', `Transfer to agent response: ${JSON.stringify(response, null, 4)}`);
     return response;
-
 }
-
-module.exports = { LiveAgentHandoff }
