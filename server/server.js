@@ -216,11 +216,13 @@ app.post('/outboundCall', async (req, res) => {
  */
 app.post('/connectConversationRelay', async (req, res) => {
     // Extract and use this body:  body: {customerReference, serverBaseUrl}
-    const referenceData = req.body.properties;
+    const properties = req.body?.properties || {};
+    const reference = properties.reference || "";
 
     logOut('Server', `Received request to connect to Conversation Relay`);
     const twilioService = new TwilioService();
-    const twiml = twilioService.connectConversationRelay(referenceData.reference, serverBaseUrl);
+
+    const twiml = twilioService.connectConversationRelay(reference, serverBaseUrl);
     res.send(twiml.toString());
 });
 
