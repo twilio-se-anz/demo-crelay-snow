@@ -3,7 +3,7 @@
  * 
  */
 const { logOut, logError } = require('../utils/logger');
-const { TwilioService } = require('../services/twilioService');
+const { TwilioService } = require('../services/TwilioService');
 
 module.exports = async function (functionArguments) {
     logOut('SendSMS', `Send SMS function called with arguments: ${JSON.stringify(functionArguments)}`);
