@@ -22,6 +22,7 @@ const { logOut, logError } = require('./utils/logger');
 // Import the services
 const { ConversationRelayService } = require('./services/ConversationRelayService');
 const { OpenAIService } = require('./services/OpenAIService');
+const { DeepSeekService } = require('./services/DeepSeekService');
 const { TwilioService } = require('./services/TwilioService');
 
 /**
@@ -85,6 +86,7 @@ app.ws('/conversation-relay', (ws) => {
                 // Create new response Service.
                 logOut('WS', `Creating Response Service`);
                 const sessionResponseService = new OpenAIService();
+                // const sessionResponseService = new DeepSeekService();
 
                 logOut('WS', `Creating ConversationRelayService`);
                 sessionConversationRelay = new ConversationRelayService(sessionResponseService, sessionData);
