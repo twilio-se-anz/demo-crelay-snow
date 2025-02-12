@@ -214,7 +214,7 @@ class ConversationRelayService extends EventEmitter {
         try {
             logOut(`Conversation Relay`, `${this.logMessage} Outgoing message from Agent: ${message}`);
             this.responseService.insertMessageIntoContext(message);
-            this.emit('conversationRelay.outgoingMessage', response);
+            this.emit('conversationRelay.outgoingMessage', message);
         } catch (error) {
             logError(`Conversation Relay`, `${this.logMessage} Error in outgoing message handling: ${error}`);
             throw error;
