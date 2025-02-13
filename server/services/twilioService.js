@@ -90,21 +90,22 @@ class TwilioService {
             const connect = response.connect();
             const conversationRelay = connect.conversationRelay({
                 url: `wss://${serverBaseUrl}/conversation-relay`,
+                welcomeGreeting: "Hi! How can I help you today?",
                 transcriptionProvider: "deepgram",
-                voice: "en-AU-Journey-D",
-                // ttsProvider: "Elevenlabs",
-                // voice: "Jessica-flash_v2_5",
+                // voice: "en-AU-Journey-D",
+                ttsProvider: "Elevenlabs",
+                voice: "Jessica-flash_v2_5",
                 dtmfDetection: "true",
                 interruptByDtmf: "true",
                 debug: "true"
             });
-
             conversationRelay.parameter({
                 name: 'customerReference',
                 value: customerReference
             });
 
             logOut('TwilioService', `Generated TwiML using Helper for call: ${response.toString()}`);
+
             return response;
 
         } catch (error) {
