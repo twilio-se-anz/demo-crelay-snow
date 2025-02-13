@@ -1,5 +1,6 @@
 /**
  * Send SMS function. This is an example of a NON-CR type tool. It should not have any CR specific messages sent back via CR.
+ * Although the actual SMS API code could be inserted directly here, we are using the common TwilioService instead, to send the SMS to keep the code contained.
  * 
  */
 const { logOut, logError } = require('../utils/logger');
