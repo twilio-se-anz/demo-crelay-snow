@@ -1,4 +1,5 @@
 const twilio = require('twilio');
+const EventEmitter = require('events');
 const { logOut, logError } = require('../utils/logger');
 
 /**
@@ -11,8 +12,9 @@ const { logOut, logError } = require('../utils/logger');
  * @property {string} fromNumber - Twilio phone number to use as the sender
  * @property {twilio.Twilio} twilioClient - Initialized Twilio client instance
  */
-class TwilioService {
+class TwilioService extends EventEmitter {
     constructor() {
+        super();
         this.accountSid = process.env.ACCOUNT_SID;
         this.authToken = process.env.AUTH_TOKEN;
         this.fromNumber = process.env.FROM_NUMBER;
@@ -29,9 +31,9 @@ class TwilioService {
      * @returns {Promise<string>} The Twilio call SID if successful
      * @throws {Error} If the call cannot be initiated or other Twilio API errors occur
      */
-    async makeOutboundCall(toNumber, customerReference = "", serverBaseUrl) {
+    async makeOutboundCall(serverBaseUrl, toNumber, customerReference = "") {
         try {
-            const conversationRelay = this.connectConversationRelay(customerReference, serverBaseUrl);
+            const conversationRelay = this.connectConversationRelay(serverBaseUrl, customerReference);
 
             const call = await this.twilioClient.calls.create({
                 to: toNumber,
@@ -81,7 +83,7 @@ class TwilioService {
      * @param {string} serverBaseUrl - Base URL for the Conversation Relay WebSocket server (without wss:// prefix)
      * @returns {twilio.twiml.VoiceResponse|null} The TwiML response object if successful, null if generation fails
      */
-    connectConversationRelay(customerReference, serverBaseUrl) {
+    connectConversationRelay(serverBaseUrl, customerReference = "") {
         try {
             logOut('TwilioService', `Generating TwiML for call with CustomerReference: ${customerReference}`);
 
@@ -104,7 +106,7 @@ class TwilioService {
                 value: customerReference
             });
 
-            logOut('TwilioService', `Generated TwiML using Helper for call: ${response.toString()}`);
+            // logOut('TwilioService', `Generated TwiML using Helper for call: ${response.toString()}`);
 
             return response;
 
