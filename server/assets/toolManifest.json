@@ -80,6 +80,117 @@
                     ]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "capture-card",
+                "description": "Captures the credit card number during a payment session",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "statusCallback": {
+                            "type": "string",
+                            "description": "URL for payment status callbacks"
+                        },
+                        "callSid": {
+                            "type": "string",
+                            "description": "The Twilio call SID"
+                        },
+                        "paymentSid": {
+                            "type": "string",
+                            "description": "The Twilio payment session SID"
+                        }
+                    },
+                    "required": [
+                        "statusCallback",
+                        "callSid",
+                        "paymentSid"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "capture-security-code",
+                "description": "Captures the credit card security code during a payment session",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "statusCallback": {
+                            "type": "string",
+                            "description": "URL for payment status callbacks"
+                        },
+                        "callSid": {
+                            "type": "string",
+                            "description": "The Twilio call SID"
+                        },
+                        "paymentSid": {
+                            "type": "string",
+                            "description": "The Twilio payment session SID"
+                        }
+                    },
+                    "required": [
+                        "statusCallback",
+                        "callSid",
+                        "paymentSid"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "capture-expiry-date",
+                "description": "Captures the credit card expiry date during a payment session",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "statusCallback": {
+                            "type": "string",
+                            "description": "URL for payment status callbacks"
+                        },
+                        "callSid": {
+                            "type": "string",
+                            "description": "The Twilio call SID"
+                        },
+                        "paymentSid": {
+                            "type": "string",
+                            "description": "The Twilio payment session SID"
+                        }
+                    },
+                    "required": [
+                        "statusCallback",
+                        "callSid",
+                        "paymentSid"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "finish-capture",
+                "description": "Completes the payment capture session",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "callSid": {
+                            "type": "string",
+                            "description": "The Twilio call SID"
+                        },
+                        "paymentSid": {
+                            "type": "string",
+                            "description": "The Twilio payment session SID"
+                        }
+                    },
+                    "required": [
+                        "callSid",
+                        "paymentSid"
+                    ]
+                }
+            }
         }
     ]
 }
