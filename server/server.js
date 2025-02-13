@@ -78,15 +78,22 @@ app.ws('/conversation-relay', (ws) => {
                 logOut('WS', `Adding setup CR setup message data to sessionData. Message type: ${message.type} and customerReference: ${message.customParameters?.customerReference}`);
 
                 // This extracts the data from the customerDataMap and adds it to the sessionData
-                sessionCustomerData = customerDataMap.get(message.customParameters.customerReference);
+                // sessionCustomerData = customerDataMap.get(message.customParameters.customerReference);
 
                 sessionData.setupData = message;
-                sessionData.customerData = sessionCustomerData
+                sessionData.customerData = customerDataMap.get(message.customParameters.customerReference);
 
                 // Create new response Service.
                 logOut('WS', `Creating Response Service`);
                 const sessionResponseService = new OpenAIService();
                 // const sessionResponseService = new DeepSeekService();
+
+                // Add an event listener for the response service for this particular session based on the call SID. This allows any endpoint to send a message to Session Response Service.
+                sessionResponseService.on(`responseService.${message.callSid}`), (responseMessage) => {
+                    logOut('WS', `Got a call SID event for the session response service: ${JSON.stringify(responseMessage)}`);
+                    // Send the message to the Session Response Service
+                    // sessionResponseService.incomingMessage(responseMessage);
+                }
 
                 logOut('WS', `Creating ConversationRelayService`);
                 sessionConversationRelay = new ConversationRelayService(sessionResponseService, sessionData);
@@ -226,6 +233,22 @@ app.post('/connectConversationRelay', async (req, res) => {
 
     const twiml = twilioService.connectConversationRelay(reference, serverBaseUrl);
     res.send(twiml.toString());
+});
+
+/**
+ * Payment status callback endpoint
+ * The payment endpoint will send data to this endpoint to indicate the status of the payment. This needs to be now sent to the Conversation Relay to
+ * inform it of the progress.
+ */
+app.post('/payment', async (req, res) => {
+    const statusCallBack = req.body;
+    logOut('Server', `Received payment status call back: ${JSON.stringify(statusCallBack)}`);
+    // Extract the call SID from the statusCallBack and insert the content into the paymentDataMap overwriting the existing content.
+    const callSid = statusCallBack.CallSid;
+    // Now that we have the call SID, emit an event to tell the relevant session about the call back received. TODO: For now we will just send the raw data, but might have to create a helper method to massage the message and use the data under Twilio Service.
+
+
+    res.json({ success: true });
 });
 
 /****************************************************

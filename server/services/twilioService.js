@@ -11,7 +11,7 @@ const { logOut, logError } = require('../utils/logger');
  * @property {string} fromNumber - Twilio phone number to use as the sender
  * @property {twilio.Twilio} twilioClient - Initialized Twilio client instance
  */
-class TwilioService {
+class TwilioService extends EventEmitter {
     constructor() {
         this.accountSid = process.env.ACCOUNT_SID;
         this.authToken = process.env.AUTH_TOKEN;
@@ -113,6 +113,178 @@ class TwilioService {
             return null;
         }
     }
+
+
+    /*********************************************************************************************************************************************
+     * 
+     *       Agent assisted PAYMENTS
+     * 
+     *********************************************************************************************************************************************/
+
+    async startCapture(callSid) {
+        this.paymentStatusCallback = statusCallback;
+        // Create the payment session
+        const sessionData = {
+            idempotencyKey: callSid + Date.now().toString(),
+            statusCallback: process.env.SERVER_BASE_URL + '/payment-status',
+            tokenType: process.env.TOKEN_TYPE, // Always tokenise the card
+            currency: process.env.CURRENCY,
+            paymentConnector: process.env.PAYMENT_CONNECTOR,
+            securityCode: true,
+            postalCode: false
+        }
+
+        logOut('TwilioService', `Starting payment session for callSID: ${callSid} with data: ${JSON.stringify(sessionData)}`);
+
+        // Now create the payment session
+        try {
+            const paymentSession = await this.twilioClient.calls(callSid)
+                .payments
+                .create(sessionData);
+
+            return paymentSession;
+        } catch (error) {
+            logError('TwilioService', `Error with StartCapture for callSID: ${callSid} - ${error}`);
+            return null;
+        }
+
+
+
+    }
+
+    async updatePaySession(callSid, paymentSid, captureType,) {
+        // Check if there is a call in progress for this callSid
+        const callResource = await twilioClient.calls(callSid).fetch();
+
+        if (callResource.status !== 'in-progress') {
+            return callback(`startCapture error: Call not in progress for ${callSid}`);
+        }
+
+        try {
+            const paymentSession = await twilioClient
+                .calls(callSid)
+                .payments(paymentSid)
+                .update({
+                    capture: "payment-card-number",
+                    idempotencyKey: callSid + Date.now().toString(),
+                    statusCallback: this.statusCallback
+                });
+
+            return paymentSession; // Pay Object
+        } catch (error) {
+            logError('TwilioService', `Error with captureCard for callSID: ${callSid} - ${error}`);
+            return null;
+        }
+
+    }
+
+    async captureCard(statusCallback, callSid, paymentSid) {
+        await this.updatePaySession(callSid, paymentSid, "payment-card-number");
+    }
+
+    async captureSecurityCode(statusCallback, callSid, paymentSid) {
+        await this.updatePaySession(callSid, paymentSid, "security-code");
+    }
+
+    async captureExpiryDate(statusCallback, callSid, paymentSid) {
+        await this.updatePaySession(callSid, paymentSid, "expiration-date");
+    }
+
+    async finishCapture() {
+        try {
+            const payment = await client
+                .calls(callSid)
+                .payments(paymentSid)
+                .update({
+                    idempotencyKey: callSid + Date.now().toString(),
+                    status: "complete",
+                    statusCallback: this.statusCallback
+                });
+        } catch (error) {
+            logError('TwilioService', `Error with finishCapture for callSID: ${callSid} - ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * We need to emit the status in a way that it is consumable. This means we need to interpret the result here and reframe it.
+     * 
+     * {
+  "DateUpdated": {
+    "description": "Last update timestamp of Pay session",
+    "type": "datetime",
+    "example": "2024-02-13T10:30:00Z"
+  },
+  "BankAccountNumber": {
+    "description": "Bank account number for ACH debit payments",
+    "type": "string",
+    "format": "Last 2 digits visible only",
+    "example": "*******92"
+  },
+  "BankRoutingNumber": {
+    "description": "Bank routing number for ACH debit payments",
+    "type": "string",
+    "format": "9 digits",
+    "example": "121181976"
+  },
+  "Capture": {
+    "description": "Expected payment information type",
+    "type": "string",
+    "values": ["card_number", "expiration_date", "security_code", "postal_code", "bank_account", "bank_routing"]
+  },
+  "ChargeAmount": {
+    "description": "Amount to charge the payment method",
+    "type": "decimal",
+    "format": "2 decimal places",
+    "example": "10.99"
+  },
+  "ErrorType": {
+    "description": "Type of error encountered",
+    "type": "string",
+    "values": ["validation_error", "processing_error", "timeout_error", "security_error"]
+  },
+  "ExpirationDate": {
+    "description": "Credit card expiration date",
+    "type": "string",
+    "format": "MMYY",
+    "example": "0522"
+  },
+  "PartialResult": {
+    "description": "DTMF capture status",
+    "type": "boolean",
+    "values": [true, false]
+  },
+  "PaymentCardNumber": {
+    "description": "Masked credit card number",
+    "type": "string",
+    "format": "Last 4 digits visible only",
+    "example": "xxxx-xxxxxx-x4001"
+  },
+  "PaymentCardPostalCode": {
+    "description": "Billing postal code for credit card",
+    "type": "string",
+    "format": "5 or 9 digits",
+    "example": "94109"
+  },
+  "PaymentCardType": {
+    "description": "Type of credit card",
+    "type": "string",
+    "values": ["visa", "mastercard", "amex", "discover"]
+  },
+  "Required": {
+    "description": "Remaining required payment information",
+    "type": "array",
+    "values": ["ExpirationDate", "SecurityCode", "PostalCode", "CardNumber"]
+  }
+}
+     * @param {*} status 
+     */
+    emitStatusCallback(status) {
+        this.emit(`responseService.${message.callSid}`, status);
+    }
+
+    /******************************************************************************************************/
+
 }
 
 module.exports = { TwilioService };
