@@ -31,6 +31,7 @@ const { TwilioService } = require('./services/TwilioService');
  * TODO: Can this be per WS session?
  */
 let customerDataMap = new Map();
+const twilioService = new TwilioService();
 
 /****************************************************
  * 
@@ -89,11 +90,11 @@ app.ws('/conversation-relay', (ws) => {
                 // const sessionResponseService = new DeepSeekService();
 
                 // Add an event listener for the response service for this particular session based on the call SID. This allows any endpoint to send a message to Session Response Service.
-                sessionResponseService.on(`responseService.${message.callSid}`), (responseMessage) => {
+                sessionResponseService.on(`responseService.${message.callSid}`, (responseMessage) => {
                     logOut('WS', `Got a call SID event for the session response service: ${JSON.stringify(responseMessage)}`);
                     // Send the message to the Session Response Service
                     // sessionResponseService.incomingMessage(responseMessage);
-                }
+                });
 
                 logOut('WS', `Creating ConversationRelayService`);
                 sessionConversationRelay = new ConversationRelayService(sessionResponseService, sessionData);
@@ -102,6 +103,13 @@ app.ws('/conversation-relay', (ws) => {
                 sessionConversationRelay.on('conversationRelay.outgoingMessage', (outgoingMessage) => {
                     // logOut('WS', `Sending message out: ${JSON.stringify(outgoingMessage)}`);
                     ws.send(JSON.stringify(outgoingMessage));
+                });
+
+                // Now attach an event listener to the twilioService for non-websocket events
+                twilioService.on(`twilioService.${message.callSid}`, (statusCallback) => {
+                    logOut('WS', `Call SID: ${message.callSid} twilio service sent status callback: ${JSON.stringify(statusCallback)}`);
+                    // Send the message to the Session Response Service
+                    sessionConversationRelay.incomingMessage(statusCallback);
                 });
             }
 
@@ -193,12 +201,12 @@ app.post('/outboundCall', async (req, res) => {
 
     try {
         logOut('Server', `/outboundCall: Initiating outbound call`);
-        const twilioService = new TwilioService();
+        // const twilioService = new TwilioService();
 
         const response = await twilioService.makeOutboundCall(
+            serverBaseUrl,
             requestData.phoneNumber,
-            requestData.customerReference,
-            serverBaseUrl
+            requestData.customerReference
         );
 
         logOut('Server', `/outboundCall: Call initiated with call SID: ${response}`);
@@ -224,14 +232,10 @@ app.post('/outboundCall', async (req, res) => {
  * @returns {string} TwiML response for establishing the connection
  */
 app.post('/connectConversationRelay', async (req, res) => {
-    // Extract and use this body:  body: {customerReference, serverBaseUrl}
-    const properties = req.body?.properties || {};
-    const reference = properties.reference || "";
-
     logOut('Server', `Received request to connect to Conversation Relay`);
-    const twilioService = new TwilioService();
+    // const twilioService = new TwilioService();
 
-    const twiml = twilioService.connectConversationRelay(reference, serverBaseUrl);
+    const twiml = twilioService.connectConversationRelay(serverBaseUrl);
     res.send(twiml.toString());
 });
 
@@ -240,14 +244,14 @@ app.post('/connectConversationRelay', async (req, res) => {
  * The payment endpoint will send data to this endpoint to indicate the status of the payment. This needs to be now sent to the Conversation Relay to
  * inform it of the progress.
  */
-app.post('/payment', async (req, res) => {
+app.post('/twilioStatusCallback', async (req, res) => {
     const statusCallBack = req.body;
-    logOut('Server', `Received payment status call back: ${JSON.stringify(statusCallBack)}`);
+    logOut('Server', `Received a Twilio status call back: ${JSON.stringify(statusCallBack)}`);
     // Extract the call SID from the statusCallBack and insert the content into the paymentDataMap overwriting the existing content.
     const callSid = statusCallBack.CallSid;
     // Now that we have the call SID, emit an event to tell the relevant session about the call back received. TODO: For now we will just send the raw data, but might have to create a helper method to massage the message and use the data under Twilio Service.
-
-
+    // const twilioService = new TwilioService();
+    twilioService.evaluateStatusCallback(statusCallBack);
     res.json({ success: true });
 });
 
