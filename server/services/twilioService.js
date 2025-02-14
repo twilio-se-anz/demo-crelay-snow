@@ -118,13 +118,17 @@ class TwilioService extends EventEmitter {
 
     /**
      * Evaluate the status callback received
+     * 
+     * 
      */
     async evaluateStatusCallback(statusCallback) {
         logOut('TwilioService', `Evaluating status callback: ${JSON.stringify(statusCallback)}`);
         // Do something and then emit the event type
-        const callSid = statusCallBack.CallSid;
-        this.emitStatusCallback(`twilio.${callSid}`, statusCallback);
+        const callSid = statusCallback.CallSid;
+        logOut('TwilioService', `Emitting event status callback for callSid: ${callSid}`);
+        this.emit(`twilioService.${callSid}`, statusCallback);
     }
+
 
     /*********************************************************************************************************************************************
      * 
@@ -221,79 +225,75 @@ class TwilioService extends EventEmitter {
      * We need to emit the status in a way that it is consumable. This means we need to interpret the result here and reframe it.
      * 
      * {
-  "DateUpdated": {
+    "DateUpdated": {
     "description": "Last update timestamp of Pay session",
     "type": "datetime",
     "example": "2024-02-13T10:30:00Z"
-  },
-  "BankAccountNumber": {
+    },
+    "BankAccountNumber": {
     "description": "Bank account number for ACH debit payments",
     "type": "string",
     "format": "Last 2 digits visible only",
     "example": "*******92"
-  },
-  "BankRoutingNumber": {
+    },
+    "BankRoutingNumber": {
     "description": "Bank routing number for ACH debit payments",
     "type": "string",
     "format": "9 digits",
     "example": "121181976"
-  },
-  "Capture": {
+    },
+    "Capture": {
     "description": "Expected payment information type",
     "type": "string",
     "values": ["card_number", "expiration_date", "security_code", "postal_code", "bank_account", "bank_routing"]
-  },
-  "ChargeAmount": {
+    },
+    "ChargeAmount": {
     "description": "Amount to charge the payment method",
     "type": "decimal",
     "format": "2 decimal places",
     "example": "10.99"
-  },
-  "ErrorType": {
+    },
+    "ErrorType": {
     "description": "Type of error encountered",
     "type": "string",
     "values": ["validation_error", "processing_error", "timeout_error", "security_error"]
-  },
-  "ExpirationDate": {
+    },
+    "ExpirationDate": {
     "description": "Credit card expiration date",
     "type": "string",
     "format": "MMYY",
     "example": "0522"
-  },
-  "PartialResult": {
+    },
+    "PartialResult": {
     "description": "DTMF capture status",
     "type": "boolean",
     "values": [true, false]
-  },
-  "PaymentCardNumber": {
+    },
+    "PaymentCardNumber": {
     "description": "Masked credit card number",
     "type": "string",
     "format": "Last 4 digits visible only",
     "example": "xxxx-xxxxxx-x4001"
-  },
-  "PaymentCardPostalCode": {
+    },
+    "PaymentCardPostalCode": {
     "description": "Billing postal code for credit card",
     "type": "string",
     "format": "5 or 9 digits",
     "example": "94109"
-  },
-  "PaymentCardType": {
+    },
+    "PaymentCardType": {
     "description": "Type of credit card",
     "type": "string",
     "values": ["visa", "mastercard", "amex", "discover"]
-  },
-  "Required": {
+    },
+    "Required": {
     "description": "Remaining required payment information",
     "type": "array",
     "values": ["ExpirationDate", "SecurityCode", "PostalCode", "CardNumber"]
-  }
-}
+    }
+    }
      * @param {*} status 
      */
-    emitStatusCallback(status) {
-        this.emit(`responseService.${message.callSid}`, status);
-    }
-
     /******************************************************************************************************/
 
 }
