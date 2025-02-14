@@ -169,6 +169,7 @@ class ResponseService extends EventEmitter {
      * @param {string} message - Message content to add to context
      */
     async insertMessageIntoContext(role = 'system', message) {
+        logOut('ResponseService', `Inserting message into context: ${role}: ${message}`);
         this.messages.push({ role, content: message });
     }
 

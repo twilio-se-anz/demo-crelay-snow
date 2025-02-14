@@ -101,8 +101,8 @@ app.ws('/conversation-relay', (ws) => {
                 // Now attach an event listener to the twilioService for non-websocket events
                 twilioService.on(`twilioService.${message.callSid}`, (statusCallback) => {
                     logOut('WS', `Call SID: ${message.callSid} twilio service sent status callback: ${JSON.stringify(statusCallback)}`);
-                    // Send the message to the Session Response Service
-                    sessionConversationRelay.incomingMessage(statusCallback);
+                    // Send the message to the Session Response Service directly. NOTE: It is assumed that Twilio Service will manipulate the content based on it's understanding of the message.
+                    sessionResponseService.insertMessageIntoContext('system', statusCallback);
                 });
             }
 
@@ -241,7 +241,8 @@ app.post('/twilioStatusCallback', async (req, res) => {
     const statusCallBack = req.body;
     logOut('Server', `Received a Twilio status call back: ${JSON.stringify(statusCallBack)}`);
     // Extract the call SID from the statusCallBack and insert the content into the paymentDataMap overwriting the existing content.
-    const callSid = statusCallBack.CallSid;
+    const callSid = statusCallBack.callSid;
+    logOut('Server', `Call SID: ${callSid}`);
     // Now that we have the call SID, emit an event to tell the relevant session about the call back received. TODO: For now we will just send the raw data, but might have to create a helper method to massage the message and use the data under Twilio Service.
     // const twilioService = new TwilioService();
     twilioService.evaluateStatusCallback(statusCallBack);

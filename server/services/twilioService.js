@@ -115,6 +115,19 @@ class TwilioService extends EventEmitter {
             return null;
         }
     }
+
+    /**
+     * Evaluate the status callback received
+     * 
+     * 
+     */
+    async evaluateStatusCallback(statusCallback) {
+        logOut('TwilioService', `Evaluating status callback: ${JSON.stringify(statusCallback)}`);
+        // Do something and then emit the event type
+        const callSid = statusCallback.CallSid;
+        logOut('TwilioService', `Emitting event status callback for callSid: ${callSid}`);
+        this.emit(`twilioService.${callSid}`, statusCallback);
+    }
 }
 
 module.exports = { TwilioService };
