@@ -54,13 +54,17 @@ Configure your Conversation Relay parameters in server/services/twilioService.js
 │   ├── package.json      # Server dependencies and scripts
 │   ├── server.js         # Main server implementation
 │   ├── assets/           # Configuration assets
-│   │   ├── context.md    # GPT conversation context
-│   │   └── toolManifest.json # Available tools configuration
+│   │   ├── defaultContext.md    # Default GPT conversation context
+│   │   ├── defaultToolManifest.json # Default available tools configuration
+│   │   ├── MyContext.md        # Specific context
+│   │   └── MyToolManifest.json # Specific tools
 │   ├── services/         # Core service implementations
 │   │   ├── ConversationRelayService.js
 │   │   ├── OpenAIService.js
+│   │   ├── DeepSeekService.js
+│   │   ├── ResponseService.js
 │   │   ├── SilenceHandler.js
-│   │   └── twilioService.js
+│   │   └── TwilioService.js
 │   ├── tools/           # Tool implementations
 │   │   ├── end-call.js
 │   │   ├── live-agent-handoff.js
@@ -128,7 +132,6 @@ The silence handling is modular and follows separation of concerns:
 - Thresholds are configurable through constants in server.js
 
 This design ensures reliable conversation flow while preventing indefinite silence periods, improving the overall user experience.
-
 
 ## Twilio Configuration
 
@@ -243,6 +246,10 @@ PORT=3001                                    # Server port number
 SERVER_BASE_URL=your_server_url              # Base URL for your server (e.g., ngrok URL)
 OPENAI_API_KEY=your_openai_api_key          # OpenAI API key for GPT integration
 OPENAI_MODEL=gpt-4-1106-preview             # OpenAI model to use for conversations
+
+# Dynamic Context Configuration
+CONTEXT_FILE=MyContext.md                   # Specify which context file to use (defaults to defaultContext.md)
+TOOL_MANIFEST_FILE=MyToolManifest.json      # Specify which tool manifest to use (defaults to defaultToolManifest.json)
 ```
 
 These variables are used by the server for:
@@ -250,6 +257,34 @@ These variables are used by the server for:
 - Setting the server's base URL for Twilio integration
 - Authenticating with OpenAI's API
 - Specifying the OpenAI model for conversations
+- Loading specific context and tool configurations
+
+### Dynamic Context System
+
+The system supports dynamic context loading through environment variables, allowing different conversation contexts and tool configurations based on your needs. This feature enables the system to adapt its behavior and capabilities for different use cases.
+
+The dynamic context system is organized in the `server/assets` directory with multiple context and tool manifest files:
+
+- `defaultContext.md` and `defaultToolManifest.json` - Used when no specific context is configured
+- `MyContext.md` and `MyToolManifest.json` - Specialized context and tools for Bill of Quantities calls
+
+To use a specific context:
+1. Add the context and tool manifest files to the `server/assets` directory
+2. Configure the environment variables in your `.env` file:
+   ```bash
+   CONTEXT_FILE=YourContext.md
+   TOOL_MANIFEST_FILE=YourToolManifest.json
+   ```
+
+If these variables are not set, the system defaults to:
+- `defaultContext.md`
+- `defaultToolManifest.json`
+
+This approach allows you to:
+- Support multiple use cases with different requirements
+- Maintain separation of concerns between different contexts
+- Easily add new contexts and tool sets
+- Switch contexts by updating environment variables
 
 ## Dependencies
 
@@ -270,8 +305,8 @@ POST /outboundCall
   "properties": {
     "phoneNumber": "+1234567890",      // [REQUIRED] Destination phone number in E.164 format
     "customerReference": "abc123",      // [OPTIONAL] Unique reference to associate with the call
-    "firstname": "Bob",                 // [OPTIONAL] Additional customer data
-    "lastname": "Jones"                 // [OPTIONAL] Additional customer data
+    "firstname": "Bob",                 // [OPTIONAL] Additional parameter data
+    "lastname": "Jones"                 // [OPTIONAL] Additional parameter data
   }
 }
 ```
@@ -292,16 +327,16 @@ curl -X POST \
   }'
 ```
 
-### Data Flow and Customer Reference
+### Data Flow and Parameter Reference
 
-The system uses a customer reference mechanism to maintain context throughout the call lifecycle:
+The system uses a reference mechanism to maintain context and pass parameters throughout the call lifecycle:
 
-1. **Initial Storage**: When the outbound call endpoint is hit, all provided data is stored in a `customerDataMap` using the customerReference as the key:
+1. **Initial Storage**: When the outbound call endpoint is hit, all provided parameter data is stored in a `parameterDataMap` using the reference as the key:
    ```javascript
-   customerDataMap.set(requestData.customerReference, { requestData });
+   parameterDataMap.set(requestData.customerReference, { requestData });
    ```
 
-2. **Conversation Relay Parameter**: The customerReference is passed to the Conversation Relay service as a parameter:
+2. **Conversation Relay Parameter**: The reference is passed to the Conversation Relay service as a parameter:
    ```javascript
    conversationRelay.parameter({
      name: 'customerReference',
@@ -310,21 +345,21 @@ The system uses a customer reference mechanism to maintain context throughout th
    ```
 
 3. **WebSocket Session**: When the Conversation Relay establishes the WebSocket connection:
-   - The initial setup message contains the customerReference in customParameters
-   - The server retrieves the stored data using this reference
-   - The data is attached to the session for use throughout the call
+   - The initial setup message contains the reference in customParameters
+   - The server retrieves the stored parameter data using this reference
+   - The parameter data is attached to the session for use throughout the call
 
 This mechanism allows you to:
-- Pass arbitrary data to the call session without size limitations in the Conversation Relay parameters
-- Access the full customer context throughout the call lifecycle
-- Maintain session-specific data storage
+- Pass arbitrary parameters to the call session without size limitations
+- Access all parameter data throughout the call lifecycle
+- Maintain session-specific parameter storage
 
 ### Implementation Details
 
-1. The endpoint stores the provided customer data in a session map using the customerReference as the key
+1. The endpoint stores the provided parameter data in a session map using the reference as the key
 2. Initiates an outbound call via Twilio using the provided phone number
 3. Connects the call to the Conversation Relay service once established
-4. The customerReference is passed as a parameter to the Conversation Relay, allowing access to the stored customer data during the call
+4. The customerReference is passed as a parameter to the Conversation Relay, allowing access to the stored parameter data during the call
 
 ### Response
 

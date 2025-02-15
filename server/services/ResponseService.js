@@ -47,9 +47,6 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// Load the context & tool manifest
-let context = fs.readFileSync(path.join(__dirname, '../assets/context.md'), 'utf8');
-const toolManifest = require('../assets/toolManifest.json');
 const { logOut, logError } = require('../utils/logger');
 
 class ResponseService extends EventEmitter {
@@ -57,28 +54,17 @@ class ResponseService extends EventEmitter {
      * Creates a new ResponseService instance.
      * Initializes client, loads tools from manifest, and sets up initial state.
      * 
+     * @param {string} contextFile - Path to the context.md file
+     * @param {string} toolManifestFile - Path to the toolManifest.json file
      * @throws {Error} If tool loading fails
      */
-    constructor() {
+    constructor(contextFile, toolManifestFile) {
         super();
         this.messages = [];
-        this.promptContext = context;
-        this.toolManifest = toolManifest;
         this.isInterrupted = false;
 
-        // Load tools from tool manifest and ../tools folder
-        this.toolDefinitions = toolManifest.tools;
-        this.loadedTools = {};
-        logOut('ResponseService', `Loading tools...`);
-
-        this.toolDefinitions.forEach((tool) => {
-            let functionName = tool.function.name;
-            // Dynamically load all tool files
-            // Load the function directly since we're using module.exports = function
-            this.loadedTools[functionName] = require(`../tools/${functionName}`);
-            logOut('ResponseService', `Loaded function: ${functionName}`);
-        });
-        logOut('ResponseService', `Loaded ${this.toolDefinitions.length} tools`);
+        // Initialize context and tools using updateContext
+        this.updateContext(contextFile, toolManifestFile);
     }
 
     /**
@@ -171,6 +157,43 @@ class ResponseService extends EventEmitter {
     async insertMessageIntoContext(role = 'system', message) {
         logOut('ResponseService', `Inserting message into context: ${role}: ${message}`);
         this.messages.push({ role, content: message });
+    }
+
+    /**
+     * Updates the context and tool manifest files used by the service dynamically. The name passed in will be used to load the context and tool manifest files.
+     * The convention is that the context and manifest filles will be stored in the assets directory.
+     * 
+     * @param {string} contextFile - Path to the new context.md file
+     * @param {string} toolManifestFile - Path to the new toolManifest.json file
+     * @throws {Error} If file loading fails
+     */
+    updateContext(contextFile, toolManifestFile) {
+        logOut('ResponseService', `Updating context with new files: ${contextFile}, ${toolManifestFile}`);
+
+        try {
+            // Load new context and tool manifest from provided file paths
+            const context = fs.readFileSync(path.join(__dirname, `../assets/${contextFile}`), 'utf8');
+            const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
+
+            this.promptContext = context;
+            this.toolManifest = toolManifest;
+
+            // Update tool definitions and reload tools
+            this.toolDefinitions = toolManifest.tools;
+            this.loadedTools = {};
+
+            logOut('ResponseService', `Reloading tools...`);
+            this.toolDefinitions.forEach((tool) => {
+                let functionName = tool.function.name;
+                this.loadedTools[functionName] = require(`../tools/${functionName}`);
+                logOut('ResponseService', `Loaded function: ${functionName}`);
+            });
+            logOut('ResponseService', `Loaded ${this.toolDefinitions.length} tools`);
+
+        } catch (error) {
+            logError('ResponseService', `Error updating context. Please ensure the files are in the /assets directory:`, error);
+            throw error;
+        }
     }
 
     /**
