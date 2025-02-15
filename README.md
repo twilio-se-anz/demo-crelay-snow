@@ -54,13 +54,17 @@ Configure your Conversation Relay parameters in server/services/twilioService.js
 │   ├── package.json      # Server dependencies and scripts
 │   ├── server.js         # Main server implementation
 │   ├── assets/           # Configuration assets
-│   │   ├── context.md    # GPT conversation context
-│   │   └── toolManifest.json # Available tools configuration
+│   │   ├── defaultContext.md    # Default GPT conversation context
+│   │   ├── defaultToolManifest.json # Default available tools configuration
+│   │   ├── MyContext.md        # Specific context
+│   │   └── MyToolManifest.json # Specific tools
 │   ├── services/         # Core service implementations
 │   │   ├── ConversationRelayService.js
 │   │   ├── OpenAIService.js
+│   │   ├── DeepSeekService.js
+│   │   ├── ResponseService.js
 │   │   ├── SilenceHandler.js
-│   │   └── twilioService.js
+│   │   └── TwilioService.js
 │   ├── tools/           # Tool implementations
 │   │   ├── end-call.js
 │   │   ├── live-agent-handoff.js
@@ -128,7 +132,6 @@ The silence handling is modular and follows separation of concerns:
 - Thresholds are configurable through constants in server.js
 
 This design ensures reliable conversation flow while preventing indefinite silence periods, improving the overall user experience.
-
 
 ## Twilio Configuration
 
@@ -243,6 +246,10 @@ PORT=3001                                    # Server port number
 SERVER_BASE_URL=your_server_url              # Base URL for your server (e.g., ngrok URL)
 OPENAI_API_KEY=your_openai_api_key          # OpenAI API key for GPT integration
 OPENAI_MODEL=gpt-4-1106-preview             # OpenAI model to use for conversations
+
+# Dynamic Context Configuration
+CONTEXT_FILE=MyContext.md                   # Specify which context file to use (defaults to defaultContext.md)
+TOOL_MANIFEST_FILE=MyToolManifest.json      # Specify which tool manifest to use (defaults to defaultToolManifest.json)
 ```
 
 These variables are used by the server for:
@@ -250,6 +257,34 @@ These variables are used by the server for:
 - Setting the server's base URL for Twilio integration
 - Authenticating with OpenAI's API
 - Specifying the OpenAI model for conversations
+- Loading specific context and tool configurations
+
+### Dynamic Context System
+
+The system supports dynamic context loading through environment variables, allowing different conversation contexts and tool configurations based on your needs. This feature enables the system to adapt its behavior and capabilities for different use cases.
+
+The dynamic context system is organized in the `server/assets` directory with multiple context and tool manifest files:
+
+- `defaultContext.md` and `defaultToolManifest.json` - Used when no specific context is configured
+- `MyContext.md` and `MyToolManifest.json` - Specialized context and tools for Bill of Quantities calls
+
+To use a specific context:
+1. Add the context and tool manifest files to the `server/assets` directory
+2. Configure the environment variables in your `.env` file:
+   ```bash
+   CONTEXT_FILE=YourContext.md
+   TOOL_MANIFEST_FILE=YourToolManifest.json
+   ```
+
+If these variables are not set, the system defaults to:
+- `defaultContext.md`
+- `defaultToolManifest.json`
+
+This approach allows you to:
+- Support multiple use cases with different requirements
+- Maintain separation of concerns between different contexts
+- Easily add new contexts and tool sets
+- Switch contexts by updating environment variables
 
 ## Dependencies
 
