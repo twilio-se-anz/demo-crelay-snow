@@ -101,10 +101,27 @@ class TwilioService extends EventEmitter {
                 interruptByDtmf: "true",
                 debug: "true"
             });
-            conversationRelay.parameter({
-                name: 'customerReference',
-                value: customerReference
-            });
+
+            // Which Context to use for this call (or the default)
+            conversationRelay.parameter(
+                {
+                    name: 'contextFile',
+                    value: process.env.LLM_CONTEXT || 'defaultContext.md'
+                });
+
+            // Which Manifest to use for this call (or the default)
+            conversationRelay.parameter(
+                {
+                    name: 'toolManifestFile',
+                    value: process.env.LLM_MANIFEST || 'defaultToolManifest.json'
+                });
+
+
+            conversationRelay.parameter(
+                {
+                    name: 'customerReference',
+                    value: customerReference
+                });
 
             // logOut('TwilioService', `Generated TwiML using Helper for call: ${response.toString()}`);
 

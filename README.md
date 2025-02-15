@@ -270,8 +270,8 @@ POST /outboundCall
   "properties": {
     "phoneNumber": "+1234567890",      // [REQUIRED] Destination phone number in E.164 format
     "customerReference": "abc123",      // [OPTIONAL] Unique reference to associate with the call
-    "firstname": "Bob",                 // [OPTIONAL] Additional customer data
-    "lastname": "Jones"                 // [OPTIONAL] Additional customer data
+    "firstname": "Bob",                 // [OPTIONAL] Additional parameter data
+    "lastname": "Jones"                 // [OPTIONAL] Additional parameter data
   }
 }
 ```
@@ -292,16 +292,16 @@ curl -X POST \
   }'
 ```
 
-### Data Flow and Customer Reference
+### Data Flow and Parameter Reference
 
-The system uses a customer reference mechanism to maintain context throughout the call lifecycle:
+The system uses a reference mechanism to maintain context and pass parameters throughout the call lifecycle:
 
-1. **Initial Storage**: When the outbound call endpoint is hit, all provided data is stored in a `customerDataMap` using the customerReference as the key:
+1. **Initial Storage**: When the outbound call endpoint is hit, all provided parameter data is stored in a `parameterDataMap` using the reference as the key:
    ```javascript
-   customerDataMap.set(requestData.customerReference, { requestData });
+   parameterDataMap.set(requestData.customerReference, { requestData });
    ```
 
-2. **Conversation Relay Parameter**: The customerReference is passed to the Conversation Relay service as a parameter:
+2. **Conversation Relay Parameter**: The reference is passed to the Conversation Relay service as a parameter:
    ```javascript
    conversationRelay.parameter({
      name: 'customerReference',
@@ -310,21 +310,21 @@ The system uses a customer reference mechanism to maintain context throughout th
    ```
 
 3. **WebSocket Session**: When the Conversation Relay establishes the WebSocket connection:
-   - The initial setup message contains the customerReference in customParameters
-   - The server retrieves the stored data using this reference
-   - The data is attached to the session for use throughout the call
+   - The initial setup message contains the reference in customParameters
+   - The server retrieves the stored parameter data using this reference
+   - The parameter data is attached to the session for use throughout the call
 
 This mechanism allows you to:
-- Pass arbitrary data to the call session without size limitations in the Conversation Relay parameters
-- Access the full customer context throughout the call lifecycle
-- Maintain session-specific data storage
+- Pass arbitrary parameters to the call session without size limitations
+- Access all parameter data throughout the call lifecycle
+- Maintain session-specific parameter storage
 
 ### Implementation Details
 
-1. The endpoint stores the provided customer data in a session map using the customerReference as the key
+1. The endpoint stores the provided parameter data in a session map using the reference as the key
 2. Initiates an outbound call via Twilio using the provided phone number
 3. Connects the call to the Conversation Relay service once established
-4. The customerReference is passed as a parameter to the Conversation Relay, allowing access to the stored customer data during the call
+4. The customerReference is passed as a parameter to the Conversation Relay, allowing access to the stored parameter data during the call
 
 ### Response
 

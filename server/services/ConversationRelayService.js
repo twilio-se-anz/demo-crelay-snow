@@ -48,7 +48,7 @@
  * });
  * 
  * // Start conversation
- * await relayService.setup(sessionCustomerData);
+ * await relayService.setup(sessionData);
  * 
  * // Handle incoming message
  * await relayService.incomingMessage({
@@ -113,20 +113,20 @@ class ConversationRelayService extends EventEmitter {
      * This method is called once at the start of a new conversation.
      * 
      * @async
-     * @param {Object} sessionData - Session and customer information
-     * @param {Object} sessionData.customerData - Customer-specific data
+     * @param {Object} sessionData - Session and parameter information
+     * @param {Object} sessionData.parameterData - Parameter data passed through the conversation relay
      * @param {Object} sessionData.setupData - Call setup information
-     * @param {string} sessionCustomerData.setupData.callSid - Unique call identifier
+     * @param {string} sessionData.setupData.callSid - Unique call identifier
      * @emits conversationRelay.silence
      * @returns {Promise<void>} Resolves when setup is complete
      */
     async setupMessage(sessionData) {
-        // Pull out sessionCustomerData parts into own variables
-        const { customerData, setupData } = sessionData;
+        // Pull out session data parts into own variables
+        const { parameterData, setupData } = sessionData;
         this.logMessage = `Call SID: ${setupData.callSid}] `
 
         // This first system message pushes all the data into the Response Service in preparation for the conversation under generateResponse.
-        const initialMessage = `These are all the details of the call: ${JSON.stringify(setupData, null, 4)} and the data needed to complete your objective: ${JSON.stringify(customerData, null, 4)}. Use this to complete your objective`;
+        const initialMessage = `These are all the details of the call: ${JSON.stringify(setupData, null, 4)} and the parameter data needed to complete your objective: ${JSON.stringify(parameterData, null, 4)}. Use this to complete your objective`;
         this.responseService.insertMessageIntoContext('system', initialMessage);
 
         // Initialize and start silence monitoring. When triggered it will emit a 'silence' event with a message

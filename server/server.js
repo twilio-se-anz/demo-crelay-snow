@@ -26,11 +26,11 @@ const { DeepSeekService } = require('./services/DeepSeekService');
 const { TwilioService } = require('./services/TwilioService');
 
 /**
- * This customerDataMap illustrates how you would pass data via Conversation Relay Parameters.
+ * This parameterDataMap illustrates how you would pass data via Conversation Relay Parameters.
  * The intention is to store and get data via this map per WS session
  * TODO: Can this be per WS session?
  */
-let customerDataMap = new Map();
+let parameterDataMap = new Map();
 const twilioService = new TwilioService();
 
 /****************************************************
@@ -78,15 +78,20 @@ app.ws('/conversation-relay', (ws) => {
                 // Since this is the first message from CR, it will be a setup message, so add the Conversation Relay "setup" message data to the session.
                 logOut('WS', `Adding setup CR setup message data to sessionData. Message type: ${message.type} and customerReference: ${message.customParameters?.customerReference}`);
 
-                // This extracts the data from the customerDataMap and adds it to the sessionData
-                sessionCustomerData = customerDataMap.get(message.customParameters.customerReference);
-
                 sessionData.setupData = message;
-                sessionData.customerData = sessionCustomerData
+
+                // This extracts the parameter data from the parameterDataMap and add it to the sessionData
+                sessionParameterData = parameterDataMap.get(message.customParameters.customerReference);
+
+                sessionData.parameterData = sessionParameterData
+
+                // This loads the initial context and manifest of Conversation Relay setup message
+                let contextFile = message.customParameters?.contextFile;
+                let toolManifestFile = message.customParameters?.toolManifestFile;
 
                 // Create new response Service.
                 logOut('WS', `Creating Response Service`);
-                const sessionResponseService = new OpenAIService();
+                const sessionResponseService = new OpenAIService(contextFile, toolManifestFile);
                 // const sessionResponseService = new DeepSeekService();
 
                 logOut('WS', `Creating ConversationRelayService`);
@@ -190,7 +195,7 @@ app.get('/', (req, res) => {
 app.post('/outboundCall', async (req, res) => {
 
     const requestData = req.body.properties;
-    customerDataMap.set(requestData.customerReference, { requestData });
+    parameterDataMap.set(requestData.customerReference, { requestData });
 
     try {
         logOut('Server', `/outboundCall: Initiating outbound call`);
