@@ -2,6 +2,32 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. IT is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
+## Release v2.1
+
+This release brings significant enhancements to the conversation relay system:
+
+### Dynamic Context & Manifest Loading
+- Implemented a flexible context loading system that allows switching conversation contexts and tool sets at runtime
+- Added support for multiple context files (e.g., defaultContext.md, MyContext.md) to handle different use cases
+- Enhanced tool manifest system with dynamic loading capabilities, allowing tools to be loaded based on context
+- Environment variables (CONTEXT_FILE, TOOL_MANIFEST_FILE) now control which context and tools are loaded
+- Improved separation of concerns by isolating different conversation scenarios with their own contexts
+
+### Added DeepSeek Response Service
+- Integrated DeepSeek as an alternative LLM provider alongside OpenAI
+- Implemented DeepSeekService extending the base ResponseService for consistent behavior
+- Added configuration support through DEEPSEEK_API_KEY and DEEPSEEK_MODEL environment variables
+- Maintains full compatibility with existing tool execution and conversation management features
+- Enables easy switching between LLM providers through service configuration
+
+### Added Twilio Status Callback Endpoint
+- New `/twilioStatusCallback` endpoint for handling Twilio event notifications
+- Real-time status updates are now propagated to the conversation context
+- Implemented event-based system to route callbacks to appropriate conversation sessions
+- Status updates are automatically inserted into conversation context for LLM awareness
+- Enhanced call monitoring and state management through Twilio's callback system
+
+
 1. There is a main Server that has two functions:
    - It is a WebSocket server - The Websocket server maintains a connection and relays messages between the two parties. It is the core of the conversation relay system.
    - It is a API endpoint - The endpoints are used to execute code for various components, such as connecting Conversation Relay for example.
