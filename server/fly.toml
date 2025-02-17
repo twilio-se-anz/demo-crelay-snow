@@ -1,13 +1,19 @@
-# fly.toml app configuration file generated for simple-conversation-relay on 2025-02-17T14:06:07+11:00
+# fly.toml app configuration file generated for server-late-morning-2173 on 2025-02-17T15:22:29+11:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'simple-conversation-relay'
+app = 'server-late-morning-2173'
 primary_region = 'lax'
 
+[build]
+
+[mounts]
+  source = "assets"
+  destination = "/assets"
+
 [http_service]
-  internal_port = 8080
+  internal_port = 3001
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
