@@ -1,0 +1,176 @@
+{
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "end-call",
+                "description": "end this call now",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "conversationSummary": {
+                            "type": "string",
+                            "description": "A summary of the call"
+                        }
+                    },
+                    "required": [
+                        "conversationSummary"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "live-agent-handoff",
+                "description": "Transfers the call to a human agent",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "As summary of the call"
+                        }
+                    },
+                    "required": [
+                        "summary"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "send-dtmf",
+                "description": "This sends DTMF tones to the call",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dtmfDigit": {
+                            "type": "string",
+                            "description": "The DTMF digit value to send"
+                        }
+                    },
+                    "required": [
+                        "dtmfDigit"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "start-capture",
+                "description": "This starts the capturing on a call for the particular call Sid. It returns a payment Sid",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "callSid": {
+                            "type": "string",
+                            "description": "This is the call SID for the current call."
+                        }
+                    },
+                    "required": [
+                        "callSid"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "capture-card",
+                "description": "This starts capturing card data on a call for the particular call Sid and payment Sid. It returns masked card data in PaymentCardNumber",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "callSid": {
+                            "type": "string",
+                            "description": "This is the call SID for the current call."
+                        },
+                        "paymentSid": {
+                            "type": "string",
+                            "description": "This is the payment SID for the current call Sid."
+                        }
+                    },
+                    "required": [
+                        "callSid",
+                        "paymentSid"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "capture-security-code",
+                "description": "This starts capturing security code data on a call for the particular call Sid and payment Sid. It returns masked security code data in SecurityCode",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "callSid": {
+                            "type": "string",
+                            "description": "This is the call SID for the current call."
+                        },
+                        "paymentSid": {
+                            "type": "string",
+                            "description": "This is the payment SID for the current call Sid."
+                        }
+                    },
+                    "required": [
+                        "callSid",
+                        "paymentSid"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "capture-expiry-date",
+                "description": "This starts capturing card expiration date on a call for the particular call Sid and payment Sid. It returns the expiration date data in ExpirationDate",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "callSid": {
+                            "type": "string",
+                            "description": "This is the call SID for the current call."
+                        },
+                        "paymentSid": {
+                            "type": "string",
+                            "description": "This is the payment SID for the current call Sid."
+                        }
+                    },
+                    "required": [
+                        "callSid",
+                        "paymentSid"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "finish-capture",
+                "description": "This finishes capturing card data on a call for the particular call Sid and payment Sid. It returns a payment token in PaymentToken",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "callSid": {
+                            "type": "string",
+                            "description": "This is the call SID for the current call."
+                        },
+                        "paymentSid": {
+                            "type": "string",
+                            "description": "This is the payment SID for the current call Sid."
+                        }
+                    },
+                    "required": [
+                        "callSid",
+                        "paymentSid"
+                    ]
+                }
+            }
+        }
+    ]
+}
