@@ -64,7 +64,7 @@ class ResponseService extends EventEmitter {
         this.isInterrupted = false;
 
         // Initialize context and tools using updateContext
-        this.updateContext(contextFile, toolManifestFile);
+        this.updateContextAndManifest(contextFile, toolManifestFile);
     }
 
     /**
@@ -167,7 +167,7 @@ class ResponseService extends EventEmitter {
      * @param {string} toolManifestFile - Path to the new toolManifest.json file
      * @throws {Error} If file loading fails
      */
-    updateContext(contextFile, toolManifestFile) {
+    updateContextAndManifest(contextFile, toolManifestFile) {
         logOut('ResponseService', `Updating context with new files: ${contextFile}, ${toolManifestFile}`);
 
         try {
@@ -175,7 +175,13 @@ class ResponseService extends EventEmitter {
             const context = fs.readFileSync(path.join(__dirname, `../assets/${contextFile}`), 'utf8');
             const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
 
-            this.promptContext = context;
+            // Reset conversation history and initialize with new system context
+            this.messages = [{
+                role: 'system',
+                content: context
+            }];
+
+            // Update tool definitions and reload tools
             this.toolManifest = toolManifest;
 
             // Update tool definitions and reload tools

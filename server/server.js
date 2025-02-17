@@ -30,6 +30,7 @@ const { TwilioService } = require('./services/TwilioService');
  * The intention is to store and get data via this map per WS session
  * TODO: Can this be per WS session?
  */
+let wsSessionsMap = new Map();
 let parameterDataMap = new Map();
 const twilioService = new TwilioService();
 
@@ -81,9 +82,7 @@ app.ws('/conversation-relay', (ws) => {
                 sessionData.setupData = message;
 
                 // This extracts the parameter data from the parameterDataMap and add it to the sessionData
-                sessionParameterData = parameterDataMap.get(message.customParameters.customerReference);
-
-                sessionData.parameterData = sessionParameterData
+                sessionData.parameterData = parameterDataMap.get(message.customParameters.customerReference);
 
                 // This loads the initial context and manifest of Conversation Relay setup message
                 let contextFile = message.customParameters?.contextFile;
@@ -110,12 +109,14 @@ app.ws('/conversation-relay', (ws) => {
                     ws.send(JSON.stringify(outgoingMessage));
                 });
 
-                // Now attach an event listener to the twilioService for non-websocket events
-                twilioService.on(`twilioService.${message.callSid}`, (statusCallback) => {
-                    logOut('WS', `Call SID: ${message.callSid} twilio service sent status callback: ${JSON.stringify(statusCallback)}`);
-                    // Send the message to the Session Response Service directly. NOTE: It is assumed that Twilio Service will manipulate the content based on it's understanding of the message.
-                    sessionResponseService.insertMessageIntoContext('system', statusCallback);
-                });
+                // Add the session to the wsSessionsMap, so it can be referenced using a particular call SID.
+                wsSessionsMap.set(message.callSid,
+                    {
+                        sessionConversationRelay,
+                        sessionResponseService,
+                        sessionData
+                    }
+                )
             }
 
             sessionConversationRelay.incomingMessage(message);
@@ -245,19 +246,47 @@ app.post('/connectConversationRelay', async (req, res) => {
 });
 
 /**
- * Payment status callback endpoint
- * The payment endpoint will send data to this endpoint to indicate the status of the payment. This needs to be now sent to the Conversation Relay to
- * inform it of the progress.
+ * Endpoint to receive Twilio status callbacks and pass them to the Response Service if needed. The Twilio Service will decide what to do with the status callback.
  */
 app.post('/twilioStatusCallback', async (req, res) => {
     const statusCallBack = req.body;
-    logOut('Server', `Received a Twilio status call back: ${JSON.stringify(statusCallBack)}`);
-    // Extract the call SID from the statusCallBack and insert the content into the paymentDataMap overwriting the existing content.
+    // Extract the call SID from the statusCallBack and insert the content into the sessionMap overwriting the existing content.
     const callSid = statusCallBack.callSid;
-    logOut('Server', `Call SID: ${callSid}`);
-    // Now that we have the call SID, emit an event to tell the relevant session about the call back received. TODO: For now we will just send the raw data, but might have to create a helper method to massage the message and use the data under Twilio Service.
+    logOut('Server', `Received a Twilio status call back for call SID: ${callSid}: ${JSON.stringify(statusCallBack)}`);
+
+    // Get the session objects from the wsSessionsMap
+    let wsSession = wsSessionsMap.get(callSid);
+    let sessionResponseService = wsSession.sessionResponseService;
+
+    // Let the Twilio Service decide what to give back to the Response Service.
     // const twilioService = new TwilioService();
-    twilioService.evaluateStatusCallback(statusCallBack);
+    const evaluatedStatusCallback = twilioService.evaluateStatusCallback(statusCallBack);
+
+    // Now Send the message to the Session Response Service directly if needed. NOTE: It is assumed that Twilio Service will manipulate the content based on it's understanding of the message and if no action is required, null it.
+    if (evaluatedStatusCallback) {
+        sessionResponseService.insertMessageIntoContext('system', evaluatedStatusCallback);
+    }
+
+    res.json({ success: true });
+});
+
+app.post('/updateResponseService', async (req, res) => {
+    const requestData = req.body;
+    logOut('Server', `Received request to update Response Service with data: ${JSON.stringify(requestData)}`);
+
+    // This loads the initial context and manifest of Conversation Relay setup message
+    let callSid = requestData.callSid;
+    let contextFile = requestData.contextFile;
+    let toolManifestFile = requestData.toolManifestFile;
+
+    logOut('Server', `Changing context and manifest files for call SID: ${callSid} to: ${contextFile} and ${toolManifestFile}`);
+
+    // Get the session objects from the wsSessionsMap
+    let wsSession = wsSessionsMap.get(callSid);
+    let sessionResponseService = wsSession.sessionResponseService;
+    // Now update the context and manifest files for the sessionResponseService.
+    sessionResponseService.updateContextAndManifest(contextFile, toolManifestFile);
+
     res.json({ success: true });
 });
 
