@@ -342,6 +342,58 @@ This approach allows you to:
 - Easily add new contexts and tool sets
 - Switch contexts by updating environment variables
 
+## Fly.io Deployment
+
+To deploy the server to Fly.io, follow these steps:
+
+1. Navigate to the server directory:
+```bash
+cd server
+```
+
+2. For new deployments, use the `fly launch` command:
+```bash
+fly launch
+```
+
+3. Import your environment variables as secrets:
+```bash
+fly secrets import < .env
+```
+Note: Make sure to update your `SERVER_BASE_URL` in the .env file to use your Fly.io app's hostname without the "https://" prefix.
+
+4. Ensure your `fly.toml` file has the correct port configuration:
+```toml
+[http]
+  internal_port = 3001  # Make sure this matches your application port
+```
+
+5. Create a static volume to store your assets. This ensures your context and manifest files persist across deployments:
+```bash
+fly volume create assets -r lax -n=1
+```
+
+6. Add the volume mount configuration to your `fly.toml` file:
+```toml
+[mounts]
+  source = "assets"
+  destination = "/assets"
+```
+
+7. Deploy your application:
+```bash
+fly deploy
+```
+
+8. Verify your context and manifest files are in the mount by logging into the machine:
+```bash
+fly ssh console
+cd /assets
+ls
+```
+
+This will show your context and manifest files in the mounted volume.
+
 ## Dependencies
 
 ## Outbound Calling

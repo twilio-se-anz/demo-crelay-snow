@@ -3,8 +3,7 @@ const EventEmitter = require('events');
 const { logOut, logError } = require('../utils/logger');
 
 /**
- * Service class for handling Twilio-related operations including making calls, sending SMS,
- * and generating TwiML for the Conversation Relay service.
+ * Service class for handling Twilio-related operations including making calls, sending SMS and generating TwiML for the Conversation Relay service.
  * 
  * @class
  * @property {string} accountSid - Twilio account SID from environment variables
