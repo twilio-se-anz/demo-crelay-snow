@@ -2,6 +2,36 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. IT is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
+## Release v2.2
+
+This release adds the ability to dynamically update conversation contexts and tool manifests during an active call:
+
+### Dynamic Context & Manifest Updates
+- Added new `/updateResponseService` endpoint to change conversation context and tool manifest files during active calls
+- Enables real-time switching between different conversation scenarios without ending the call
+- Supports seamless transitions between different AI behaviors and tool sets
+
+#### Using the Update Endpoint
+
+To update the context and manifest files for an active call, send a POST request to the `/updateResponseService` endpoint:
+
+```bash
+curl -X POST \
+  'https://your-server-url/updateResponseService' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "callSid": "CA1234...",           # The active call's SID
+    "contextFile": "MyContext.md",     # New context file to load
+    "toolManifestFile": "MyToolManifest.json"  # New tool manifest to load
+  }'
+```
+
+This allows you to:
+- Switch conversation contexts mid-call
+- Update available tools based on conversation flow
+- Adapt AI behavior for different phases of the call
+- Maintain call continuity while changing conversation parameters
+
 ## Release v2.1
 
 This release brings significant enhancements to the conversation relay system:
