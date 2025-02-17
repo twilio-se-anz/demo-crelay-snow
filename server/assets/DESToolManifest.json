@@ -56,30 +56,6 @@
                     ]
                 }
             }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "send-sms",
-                "description": "This sends an SMS message to the number provided",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "to": {
-                            "type": "string",
-                            "description": "The number to send the SMS to. This HAS to be in +1234567890 format"
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "The message to be sent"
-                        }
-                    },
-                    "required": [
-                        "to",
-                        "message"
-                    ]
-                }
-            }
         }
     ]
 }
