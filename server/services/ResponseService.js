@@ -68,26 +68,6 @@ class ResponseService extends EventEmitter {
     }
 
     /**
-     * Sets call-specific parameters for the conversation.
-     * Updates message history with call details for tool usage.
-     * 
-     * @param {string} to - Twilio number receiving the call
-     * @param {string} from - Customer's phone number
-     * @param {string} callSid - Unique Twilio call identifier
-     */
-    setCallParameters(to, from, callSid) {
-        this.twilioNumber = to;
-        this.customerNumber = from;
-        this.callSid = callSid;
-
-        logOut('ResponseService', `Call to: ${this.twilioNumber} from: ${this.customerNumber} with call SID: ${this.callSid}`);
-        this.messages.push({
-            role: 'system',
-            content: `The customer phone number or "from" number is ${this.customerNumber}, the callSid is ${this.callSid} and the number to send SMSs from is: ${this.twilioNumber}. Use this information throughout as the reference when calling any of the tools. Specifically use the callSid when you use the "transfer-to-agent" tool to transfer the call to the agent`
-        });
-    }
-
-    /**
      * Executes a tool call based on function calling feature.
      * 
      * @param {Object} tool - Tool call object
