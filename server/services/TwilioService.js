@@ -93,6 +93,7 @@ class TwilioService extends EventEmitter {
                 url: `wss://${serverBaseUrl}/conversation-relay`,
                 welcomeGreeting: "Hi! How can I help you today?",
                 transcriptionProvider: "deepgram",
+                interruptible: "true",
                 // voice: "en-AU-Journey-D",
                 ttsProvider: "Elevenlabs",
                 // voice: "Jessica-flash_v2_5",
