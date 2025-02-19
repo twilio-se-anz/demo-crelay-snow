@@ -67,7 +67,7 @@
                     "properties": {
                         "to": {
                             "type": "string",
-                            "description": "The number to send the SMS to. This HAS to be in +1234567890 format"
+                            "description": "The number to send the SMS to. This HAS to be in +E.164 format"
                         },
                         "message": {
                             "type": "string",
