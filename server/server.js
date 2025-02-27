@@ -307,26 +307,24 @@ app.post('/updateResponseService', async (req, res) => {
  */
 let currentPort = PORT;
 
-const startServer = () => {
-    try {
-        const server = app.listen(currentPort, async () => {
-            try {
-                logOut('Server', `Server is running on port ${currentPort}`);
-            } catch (error) {
-                logError('Server', `Failed to load initial context and manifest: ${error}`);
-                process.exit(1);
-            }
-        });
-    } catch (error) {
+const startServer = (port) => {
+    // logOut('Server', `Starting server on port ${port}`);
+    const server = app.listen(port);
+
+    server.on('error', (error) => {     // Server emits events for errors
         if (error.code === 'EADDRINUSE') {
-            logOut('Server', `Port ${currentPort} is in use, trying ${currentPort + 1}`);
-            currentPort++;
-            startServer();
+            server.close();
+            logOut('Server', `Port ${port} is in use, trying ${port++}`);
+            startServer(port++);
         } else {
             logError('Server', `Failed to start server: ${error}`);
-            process.exit(1);
+            throw error;
         }
-    }
+    });
+
+    server.on('listening', () => {
+        logOut('Server', `Server started on port ${port}`);
+    });
 };
 
-startServer();
+startServer(PORT);
