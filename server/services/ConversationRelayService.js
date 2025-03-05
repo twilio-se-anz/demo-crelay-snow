@@ -183,6 +183,8 @@ class ConversationRelayService extends EventEmitter {
                     break;
                 case 'interrupt':
                     logOut(`Conversation Relay`, `${this.logMessage} ........ INTERRUPT: ${message.utteranceUntilInterrupt}`);
+                    // Interrupt the streaming so it does not continue to send the previous generated stream.
+                    this.responseService.interrupt();
                     break;
                 case 'info':
                     logOut(`Conversation Relay`, `${this.logMessage} INFO: ${JSON.stringify(message, null, 4)}`);

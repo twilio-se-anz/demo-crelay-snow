@@ -89,7 +89,7 @@ class ResponseService extends EventEmitter {
 
             return toolResponse;
         } catch (error) {
-            console.error(`ResponseService Error executing tool ${tool.function.name}:`, error);
+            console.error(`ResponseService executeToolCall, Error executing tool ${tool.function.name}:`, error);
             return null;
         }
     }
@@ -222,6 +222,7 @@ class ResponseService extends EventEmitter {
     async generateResponse(role = 'user', prompt) {
         let fullResponse = '';
         let toolCallCollector = null;
+        this.isInterrupted = false;
         logOut('ResponseService', `Generating response for ${role}: ${prompt}`);
 
         try {
@@ -296,8 +297,12 @@ class ResponseService extends EventEmitter {
                         }
                     };
 
+                    logOut('ResponseService', `Tool call collected: ${JSON.stringify(toolCallObj, null, 4)}`);
+
                     let toolResult = null;
                     try {
+                        logOut('ResponseService', `Executing tool start`);
+                        logOut('ResponseService', `Executing tool call: ${toolCallObj.function.name} with args: ${toolCallObj.function.arguments}`);
                         let calledTool = this.loadedTools[toolCallObj.function.name];
                         let calledToolArgs = JSON.parse(toolCallObj.function.arguments);
 
@@ -307,7 +312,7 @@ class ResponseService extends EventEmitter {
                         this.emit('llm.toolResult', toolResult);
 
                     } catch (error) {
-                        logError('ResponseService', `Error executing tool ${toolCallObj.function.name}:`, error);
+                        logError('ResponseService', `GenerateResponse, Error executing tool ${toolCallObj.function.name}:`, error);
                     }
 
                     // Add assistant response and tool result to history
