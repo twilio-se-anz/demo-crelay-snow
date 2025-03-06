@@ -18,6 +18,12 @@
  *    - Emits tool result events
  *    - Handles errors and interruptions
  * 
+ * 4. Interrupt Handling:
+ *    - Provides methods to interrupt ongoing responses
+ *    - Manages interruption state through isInterrupted flag
+ *    - Gracefully stops streaming when interrupted
+ *    - Enables natural conversation flow with interruptions
+ * 
  * Tool Loading and Execution:
  * The service implements a dynamic tool loading system where tools are loaded based on their
  * names defined in the toolManifest.json file. Each tool's filename in the /tools directory
@@ -113,7 +119,17 @@ class ResponseService extends EventEmitter {
 
     /**
      * Interrupts current response generation.
-     * Sets isInterrupted flag to true to stop streaming.
+     * Sets isInterrupted flag to true to stop streaming immediately.
+     * This method is called when a user interrupts the AI during a response,
+     * allowing the system to stop the current response and process the new input.
+     * 
+     * The interrupt mechanism works by:
+     * 1. Setting the isInterrupted flag to true
+     * 2. Breaking out of the streaming loop in generateResponse
+     * 3. Allowing the system to process the new user input
+     * 
+     * This enables more natural conversation flow by letting users
+     * interrupt lengthy responses or redirect the conversation.
      */
     interrupt() {
         this.isInterrupted = true;
@@ -122,6 +138,13 @@ class ResponseService extends EventEmitter {
     /**
      * Resets the interruption flag.
      * Allows new responses to be generated after an interruption.
+     * This method is called automatically at the beginning of generateResponse
+     * to ensure each new response starts with a clean interrupt state.
+     * 
+     * The reset mechanism ensures that:
+     * 1. Previous interruptions don't affect new responses
+     * 2. Each response generation starts with isInterrupted = false
+     * 3. The system is ready to handle new potential interruptions
      */
     resetInterrupt() {
         this.isInterrupted = false;
@@ -211,6 +234,16 @@ class ResponseService extends EventEmitter {
      *      2. Parsing the JSON string arguments into an object
      *      3. Executing the tool with the parsed arguments
      *      4. Returning the tool's response for inclusion in the conversation
+     * 
+     * == Interrupt Handling ==
+     * The method supports graceful interruption during response generation:
+     *      1. The isInterrupted flag is reset to false at the start of each response
+     *      2. During streaming, each chunk checks if isInterrupted has been set to true
+     *      3. If an interruption is detected, the streaming loop breaks immediately
+     *      4. This allows the system to quickly respond to user interruptions
+     *      5. The same interrupt check is applied to both initial and follow-up streams
+     * This approach ensures responsive conversation flow by allowing users to interrupt
+     * lengthy responses without waiting for completion.
      * 
      * @param {string} role - Message role ('user' or 'system')
      * @param {string} prompt - Input message content

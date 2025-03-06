@@ -9,17 +9,25 @@
  *    - Processes outgoing messages from agents
  *    - Manages LLM service responses
  *    - Controls conversation context
+ *    - Handles user interruptions
  * 
  * 2. Event Management:
  *    - Emits events for responses, silence, prompts
  *    - Handles DTMF (touch-tone) signals
  *    - Manages live agent handoff events
  *    - Controls conversation termination
+ *    - Processes interrupt signals
  * 
  * 3. Silence Detection:
  *    - Monitors for conversation inactivity
  *    - Sends reminder messages
  *    - Handles call termination on extended silence
+ * 
+ * 4. Interrupt Handling:
+ *    - Detects when users interrupt the AI's response
+ *    - Stops the current response stream
+ *    - Processes the new user input immediately
+ *    - Enables more natural conversation flow
  * 
  * The service integrates with a Response Service (LLM) to process messages and
  * maintain conversation context, while managing timeouts and cleanup.

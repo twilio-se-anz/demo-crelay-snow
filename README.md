@@ -2,6 +2,25 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. IT is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
+## Release v2.3
+
+This release adds interrupt handling capabilities to improve the conversational experience:
+
+### Interrupt Handling
+- Added support for handling user interruptions during AI responses
+- Implemented interrupt detection and processing in ConversationRelayService
+- Added interrupt() and resetInterrupt() methods to ResponseService for controlling response streaming
+- Enhanced streaming response generation to check for interruptions and stop gracefully
+- Improved user experience by allowing natural conversation flow with interruptions
+
+When a user interrupts the AI during a response:
+1. The system detects the interruption and sends an 'interrupt' message with the partial utterance
+2. ConversationRelayService processes this message and calls responseService.interrupt()
+3. ResponseService sets an isInterrupted flag that stops the current streaming response
+4. The system can then process the user's new input immediately
+
+This feature enables more natural conversations by allowing users to interrupt lengthy responses, correct misunderstandings immediately, or redirect the conversation without waiting for the AI to finish speaking.
+
 ## Release v2.2
 
 This release adds the ability to dynamically update conversation contexts and tool manifests during an active call:
