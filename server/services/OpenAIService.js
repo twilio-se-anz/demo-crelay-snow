@@ -19,8 +19,8 @@ class OpenAIService extends ResponseService {
      * 
      * @throws {Error} If initialization fails
      */
-    constructor(contextFile, toolManifestFile) {
-        super(contextFile, toolManifestFile);
+    constructor() {
+        super();
         this.openai = new OpenAI();
         this.model = OPENAI_MODEL;
         logOut('OpenAIService', 'Initialized');

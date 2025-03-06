@@ -59,7 +59,7 @@ This release brings significant enhancements to the conversation relay system:
 - Implemented a flexible context loading system that allows switching conversation contexts and tool sets at runtime
 - Added support for multiple context files (e.g., defaultContext.md, MyContext.md) to handle different use cases
 - Enhanced tool manifest system with dynamic loading capabilities, allowing tools to be loaded based on context
-- Environment variables (CONTEXT_FILE, TOOL_MANIFEST_FILE) now control which context and tools are loaded
+- Environment variables (LLM_CONTEXT, LLM_MANIFEST) now control which context and tools are loaded
 - Improved separation of concerns by isolating different conversation scenarios with their own contexts
 
 ### Added DeepSeek Response Service
@@ -109,8 +109,8 @@ Configure your Conversation Relay parameters in server/services/twilioService.js
       });
 
       conversationRelay.parameter({
-            name: 'customerReference',
-            value: customerReference
+            name: 'callReference',
+            value: callReference
       });
 ```
 
@@ -323,8 +323,8 @@ OPENAI_API_KEY=your_openai_api_key          # OpenAI API key for GPT integration
 OPENAI_MODEL=gpt-4-1106-preview             # OpenAI model to use for conversations
 
 # Dynamic Context Configuration
-CONTEXT_FILE=MyContext.md                   # Specify which context file to use (defaults to defaultContext.md)
-TOOL_MANIFEST_FILE=MyToolManifest.json      # Specify which tool manifest to use (defaults to defaultToolManifest.json)
+LLM_CONTEXT=MyContext.md                   # Specify which context file to use (defaults to defaultContext.md)
+LLM_MANIFEST=MyToolManifest.json      # Specify which tool manifest to use (defaults to defaultToolManifest.json)
 ```
 
 These variables are used by the server for:
@@ -347,8 +347,8 @@ To use a specific context:
 1. Add the context and tool manifest files to the `server/assets` directory
 2. Configure the environment variables in your `.env` file:
    ```bash
-   CONTEXT_FILE=YourContext.md
-   TOOL_MANIFEST_FILE=YourToolManifest.json
+   LLM_CONTEXT=YourContext.md
+   LLM_MANIFEST=YourToolManifest.json
    ```
 
 If these variables are not set, the system defaults to:
@@ -431,7 +431,7 @@ POST /outboundCall
 {
   "properties": {
     "phoneNumber": "+1234567890",      // [REQUIRED] Destination phone number in E.164 format
-    "customerReference": "abc123",      // [OPTIONAL] Unique reference to associate with the call
+    "callReference": "abc123",      // [OPTIONAL] Unique reference to associate with the call
     "firstname": "Bob",                 // [OPTIONAL] Additional parameter data
     "lastname": "Jones"                 // [OPTIONAL] Additional parameter data
   }
@@ -447,7 +447,7 @@ curl -X POST \
   --data-raw '{
     "properties": {
       "phoneNumber": "+1234567890",
-      "customerReference": "abc123",
+      "callReference": "abc123",
       "firstname": "Bob",
       "lastname": "Jones"
     }
@@ -460,14 +460,14 @@ The system uses a reference mechanism to maintain context and pass parameters th
 
 1. **Initial Storage**: When the outbound call endpoint is hit, all provided parameter data is stored in a `parameterDataMap` using the reference as the key:
    ```javascript
-   parameterDataMap.set(requestData.customerReference, { requestData });
+   parameterDataMap.set(requestData.callReference, { requestData });
    ```
 
 2. **Conversation Relay Parameter**: The reference is passed to the Conversation Relay service as a parameter:
    ```javascript
    conversationRelay.parameter({
-     name: 'customerReference',
-     value: customerReference
+     name: 'callReference',
+     value: callReference
    });
    ```
 
@@ -486,7 +486,7 @@ This mechanism allows you to:
 1. The endpoint stores the provided parameter data in a session map using the reference as the key
 2. Initiates an outbound call via Twilio using the provided phone number
 3. Connects the call to the Conversation Relay service once established
-4. The customerReference is passed as a parameter to the Conversation Relay, allowing access to the stored parameter data during the call
+4. The callReference is passed as a parameter to the Conversation Relay, allowing access to the stored parameter data during the call
 
 ### Response
 

@@ -77,12 +77,12 @@ app.ws('/conversation-relay', (ws) => {
                 logOut('WS', `Session Conversation Relay being initialised`);
 
                 // Since this is the first message from CR, it will be a setup message, so add the Conversation Relay "setup" message data to the session.
-                logOut('WS', `Adding setup CR setup message data to sessionData. Message type: ${message.type} and customerReference: ${message.customParameters?.customerReference}`);
+                logOut('WS', `Adding setup CR setup message data to sessionData. Message type: ${message.type} and callReference: ${message.customParameters?.callReference}`);
 
                 sessionData.setupData = message;
 
                 // This extracts the parameter data from the parameterDataMap and add it to the sessionData
-                sessionData.parameterData = parameterDataMap.get(message.customParameters.customerReference);
+                sessionData.parameterData = parameterDataMap.get(message.customParameters.callReference);
 
                 // This loads the initial context and manifest of Conversation Relay setup message
                 let contextFile = message.customParameters?.contextFile;
@@ -182,19 +182,19 @@ app.get('/', (req, res) => {
  *  --data-raw '{
  *      "properties": {
  *          "phoneNumber": "+1234567890",
- *          "customerReference": "abc123",
+ *          "callReference": "abc123",
  *          "firstname": "Bob",
  *          "lastname": "Jones"
  *      }
  *   }'
  * ```
- * This data will be stored in a local Map and can be retrieved via the customerReference.
+ * This data will be stored in a local Map and can be retrieved via the callReference.
  * 
  * @endpoint POST /outboundCall
  * 
  * @param {Object} req.body.properties - API request data properties
  * @param {string} req.body.properties.phoneNumber - [REQUIRED] Call's outbound phone number to call
- * @param {string} req.body.properties.customerReference - [OPTIONAL] Unique reference to pass along with the call
+ * @param {string} req.body.properties.callReference - [OPTIONAL] Unique reference to pass along with the call
  * 
  * @returns {Object} response
  * @returns {string} [response.error] - Error message if the call failed
@@ -203,7 +203,7 @@ app.get('/', (req, res) => {
 app.post('/outboundCall', async (req, res) => {
 
     const requestData = req.body.properties;
-    parameterDataMap.set(requestData.customerReference, { requestData });
+    parameterDataMap.set(requestData.callReference, { requestData });
 
     try {
         logOut('Server', `/outboundCall: Initiating outbound call`);
@@ -212,7 +212,7 @@ app.post('/outboundCall', async (req, res) => {
         const response = await twilioService.makeOutboundCall(
             serverBaseUrl,
             requestData.phoneNumber,
-            requestData.customerReference
+            requestData.callReference
         );
 
         logOut('Server', `/outboundCall: Call initiated with call SID: ${response}`);
@@ -233,7 +233,7 @@ app.post('/outboundCall', async (req, res) => {
  * @param {express.Request} req - Express request object
  * @param {express.Response} res - Express response object
  * @param {Object} req.body - Request body
- * @param {string} req.body.customerReference - Customer reference identifier
+ * @param {string} req.body.callReference - Call reference identifier
  * @param {string} req.body.serverBaseUrl - Base URL of the server
  * @returns {string} TwiML response for establishing the connection
  */

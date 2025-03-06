@@ -64,10 +64,14 @@ class ResponseService extends EventEmitter {
      * @param {string} toolManifestFile - Path to the toolManifest.json file
      * @throws {Error} If tool loading fails
      */
-    constructor(contextFile, toolManifestFile) {
+    constructor() {
         super();
-        this.messages = [];
+        this.promptMessagesArray = [];
         this.isInterrupted = false;
+
+        // Which Context, Tool Manifest to use for this call (or the default)
+        const contextFile = process.env.LLM_CONTEXT || 'defaultContext.md'
+        const toolManifestFile = process.env.LLM_MANIFEST || 'defaultToolManifest.json'
 
         // Initialize context and tools using updateContext
         this.updateContextAndManifest(contextFile, toolManifestFile);
@@ -106,15 +110,15 @@ class ResponseService extends EventEmitter {
      * @returns {Array} Array of message objects
      */
     getMessages() {
-        return this.messages;
+        return this.promptMessagesArray;
     }
 
     /**
      * Clears conversation history except for the initial system message.
      */
     clearMessages() {
-        const systemMessage = this.messages[0];
-        this.messages = [systemMessage];
+        const systemMessage = this.promptMessagesArray[0];
+        this.promptMessagesArray = [systemMessage];
     }
 
     /**
@@ -159,7 +163,7 @@ class ResponseService extends EventEmitter {
      */
     async insertMessageIntoContext(role = 'system', message) {
         logOut('ResponseService', `Inserting message into context: ${role}: ${message}`);
-        this.messages.push({ role, content: message });
+        this.promptMessagesArray.push({ role, content: message });
     }
 
     /**
@@ -179,7 +183,7 @@ class ResponseService extends EventEmitter {
             const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
 
             // Reset conversation history and initialize with new system context
-            this.messages = [{
+            this.promptMessagesArray = [{
                 role: 'system',
                 content: context
             }];
@@ -260,11 +264,11 @@ class ResponseService extends EventEmitter {
 
         try {
             // Add the prompt message to history
-            this.messages.push({ role: role, content: prompt });
+            this.promptMessagesArray.push({ role: role, content: prompt });
 
             const stream = await this.openai.chat.completions.create({
                 model: this.model,
-                messages: this.messages,
+                messages: this.promptMessagesArray,
                 tools: this.toolManifest.tools,
                 stream: true
             });
@@ -349,13 +353,13 @@ class ResponseService extends EventEmitter {
                     }
 
                     // Add assistant response and tool result to history
-                    this.messages.push({
+                    this.promptMessagesArray.push({
                         role: "assistant",
                         content: fullResponse,
                         tool_calls: [toolCallObj]
                     });
 
-                    this.messages.push({
+                    this.promptMessagesArray.push({
                         role: "tool",
                         content: JSON.stringify(toolResult),
                         tool_call_id: toolCallObj.id
@@ -364,7 +368,7 @@ class ResponseService extends EventEmitter {
                     // Continue the conversation with tool results
                     const followUpStream = await this.openai.chat.completions.create({
                         model: this.model,
-                        messages: this.messages,
+                        messages: this.promptMessagesArray,
                         stream: true
                     });
 
@@ -387,7 +391,7 @@ class ResponseService extends EventEmitter {
 
             // Add final assistant response to history if no tool was called
             if (!toolCallCollector) {
-                this.messages.push({
+                this.promptMessagesArray.push({
                     role: "assistant",
                     content: fullResponse
                 });

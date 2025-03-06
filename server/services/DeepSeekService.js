@@ -19,8 +19,8 @@ class DeepSeekService extends ResponseService {
      * 
      * @throws {Error} If initialization fails
      */
-    constructor(contextFile, toolManifestFile) {
-        super(contextFile, toolManifestFile);
+    constructor() {
+        super();
         this.openai = new OpenAI({
             baseURL: 'https://api.deepseek.com',
             apiKey: DEEPSEEK_API_KEY
