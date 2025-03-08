@@ -1,5 +1,6 @@
 /**
- * Send SMS function. This is an example of a NON-CR type tool. It should not have any CR specific messages sent back via CR.
+ * Send SMS function. This is an example of a NON-CR type tool type and will not be sent back via CR. 
+ * It also shows the toolType "error" in the response.
  * Although the actual SMS API code could be inserted directly here, we are using the common TwilioService instead, to send the SMS to keep the code contained.
  * 
  */
@@ -16,10 +17,17 @@ module.exports = async function (functionArguments) {
 
     if (!result) {
         logError('SendSMS', `Failed to send SMS to ${functionArguments.to}`);
-        response = `SMS send failed to the number`;
+        response = {
+            toolType: "error",
+            toolData: `SMS send failed to the number`
+        }
+        return response;
     }
 
-    response = `SMS sent to the number successfully to ${functionArguments.to}`;
+    response = {
+        toolType: "tool",
+        toolData: `SMS sent to the number successfully to ${functionArguments.to}`
+    }
     logOut('SendSMS', `Ending the call with endResponseContent: ${JSON.stringify(response, null, 4)}`);
     return response;
 }
