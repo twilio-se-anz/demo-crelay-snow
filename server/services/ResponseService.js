@@ -43,9 +43,9 @@
  * @property {Object} loadedTools - Map of loaded tool functions
  * 
  * Events Emitted:
- * - llm.content: Response content chunks
- * - llm.toolResult: Results from tool executions
- * - llm.error: Error events
+ * - responseService.content: Response content chunks
+ * - responseService.toolResult: Results from tool executions
+ * - responseService.error: Error events
  */
 
 const EventEmitter = require('events');
@@ -224,7 +224,7 @@ class ResponseService extends EventEmitter {
      * 
      *  == Streaming and Tool Calls ==
      * The service handles streaming responses that may include both content and tool calls:
-     *      1. Content chunks are emitted directly via 'llm.content' events
+     *      1. Content chunks are emitted directly via 'responseService.content' events
      *      2. Tool call chunks are accumulated until complete, as they may span multiple chunks
      *      3. When a complete tool call is received (finish_reason='tool_calls'):
      *          - The tool is executed with the assembled arguments
@@ -252,9 +252,9 @@ class ResponseService extends EventEmitter {
      * @param {string} role - Message role ('user' or 'system')
      * @param {string} prompt - Input message content
      * @throws {Error} If response generation fails
-     * @emits llm.content
-     * @emits llm.toolResult
-     * @emits llm.error
+     * @emits responseService.content
+     * @emits responseService.toolResult
+     * @emits responseService.error
      */
     async generateResponse(role = 'user', prompt) {
         let fullResponse = '';
@@ -285,7 +285,7 @@ class ResponseService extends EventEmitter {
 
                 if (content) {
                     fullResponse += content;
-                    this.emit('llm.content', {
+                    this.emit('responseService.content', {
                         type: "text",
                         token: content,
                         last: false
@@ -344,10 +344,47 @@ class ResponseService extends EventEmitter {
                         let calledToolArgs = JSON.parse(toolCallObj.function.arguments);
 
                         toolResult = await calledTool(calledToolArgs);
+                        logOut('ResponseService', `Conversational tool call result: ${JSON.stringify(toolResult, null, 4)}`);
 
-                        // Emit the tool result if anybody needs to use it
-                        this.emit('llm.toolResult', toolResult);
-
+                        /**
+                         * There are different types of responses that can come back from the tools to indicate what needs to be done:
+                         * 
+                         * - tool: normal tool call that returns a result that is then consumed by the LLM to produce conversational content.
+                         * - error: error message also consumed by the LLM to produce conversational content.
+                         * - crelay: Conversation Relay specific response format that is not sent back as conversational content
+                         * - llm: LLM Controller specific response format that is not sent back as conversational content, but used to change the LLM.
+                         * {
+                         *       tool: "tool-type",
+                         *       response: "response text",
+                         * } 
+                         * 
+                         */
+                        switch (toolResult.toolType) {
+                            case "tool":
+                                // Add the tool result to the conversation history
+                                logOut('ResponseService', `Tool selected: tool`);
+                                this.promptMessagesArray.push({
+                                    role: "tool",
+                                    content: JSON.stringify(toolResult.toolData),
+                                    tool_call_id: toolCallObj.id
+                                });
+                                break;
+                            case "crelay":
+                                // Emit the tool result so CR can use it
+                                logOut('ResponseService', `Tool selected: crelay`);
+                                this.emit('responseService.toolResult', toolResult.toolData);
+                                break;
+                            case "error":
+                                // Add the error to the conversation history
+                                logOut('ResponseService', `Tool selected: error`);
+                                this.promptMessagesArray.push({
+                                    role: "system",
+                                    content: toolResult.toolData
+                                });
+                                break;
+                            default:
+                                logOut('ResponseService', `No tool type selected. Using default processor`);
+                        }
                     } catch (error) {
                         logError('ResponseService', `GenerateResponse, Error executing tool ${toolCallObj.function.name}:`, error);
                     }
@@ -379,7 +416,7 @@ class ResponseService extends EventEmitter {
                         const content = chunk.choices[0]?.delta?.content || '';
                         if (content) {
                             fullResponse += content;
-                            this.emit('llm.content', {
+                            this.emit('responseService.content', {
                                 type: "text",
                                 token: content,
                                 last: false
@@ -398,14 +435,14 @@ class ResponseService extends EventEmitter {
             }
 
             // Emit the final content with last=true
-            this.emit('llm.content', {
+            this.emit('responseService.content', {
                 type: "text",
                 token: '',
                 last: true
             });
 
         } catch (error) {
-            this.emit('llm.error', error);
+            this.emit('responseService.error', error);
             throw error;
         }
     }

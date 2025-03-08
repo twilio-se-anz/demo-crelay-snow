@@ -95,21 +95,18 @@ class ConversationRelayService extends EventEmitter {
         this.logMessage = null;     // Utility log message
 
         // Set up response handler for LLM responses. These are proxied to separate from Web Server
-        this.responseService.on('llm.content', (response) => {
+        this.responseService.on('responseService.content', (response) => {
             // logOut(`Conversation Relay`, `Response received: ${JSON.stringify(response)}`);
             this.emit('conversationRelay.outgoingMessage', response);
         });
 
         // Check the tool call result if for CR specific tool calls, as these need to be sent to the WS server
-        this.responseService.on('llm.toolResult', (toolResult) => {
+        this.responseService.on('responseService.toolResult', (toolResult) => {
             logOut(`Conversation Relay`, `Tool result received: ${JSON.stringify(toolResult)}`);
-            // We need to check each of the tool call messages and if this is one of the CR specific messages, we can send, else, nothing. CR specific messages are of type: play, sendDigits, language, end.
-            if (['play', 'sendDigits', 'language', 'end'].includes(toolResult.type)) {
+            // Check if the tool result is for the conversation relay
+            if (toolResult.toolType === "crelay") {
                 // Send the tool result to the WS server
-                this.emit('conversationRelay.outgoingMessage', toolResult);
-            } else {
-                // Do nothing
-                logOut(`Conversation Relay`, `Not a CR specific message, so not sending to WS server ${JSON.stringify(toolResult)}`);
+                this.emit('conversationRelay.outgoingMessage', toolResult.toolData);
             }
         });
         logOut(`Conversation Relay`, `Service constructed`);
