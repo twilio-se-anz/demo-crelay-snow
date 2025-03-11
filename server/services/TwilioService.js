@@ -94,10 +94,16 @@ class TwilioService extends EventEmitter {
                 welcomeGreeting: "Hi! How can I help you today?",
                 transcriptionProvider: "deepgram",
                 interruptible: "true",
-                // voice: "en-AU-Journey-D",
-                ttsProvider: "Elevenlabs",
-                // voice: "Jessica-flash_v2_5",
-                voice: "Charlie-flash_v2_5",
+
+                // Google Journey Voices - Available today
+                voice: "en-AU-Journey-D",
+                voice: "Jessica-flash_v2_5",
+
+                // 11Labs voices (ETA TBD)
+                // ttsProvider: "Elevenlabs",
+                // voice: "Charlie-flash_v2_5",
+
+
                 dtmfDetection: "true",
                 interruptByDtmf: "true",
                 debug: "true"

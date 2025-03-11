@@ -4,6 +4,8 @@ This is a reference implementation aimed at introducing the key concepts of Conv
 
 ## Release v2.4
 
+NOTE: - Updated the Voices in the TwilioService.js file to reflect What is available now as of March 2025. New 11Labs voices are coming soon.
+
 This release introduces a structured tool response system to improve tool integration and response handling:
 
 ### Enhanced Tool Response Architecture
