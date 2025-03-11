@@ -97,7 +97,6 @@ class TwilioService extends EventEmitter {
 
                 // Google Journey Voices - Available today
                 voice: "en-AU-Journey-D",
-                voice: "Jessica-flash_v2_5",
 
                 // 11Labs voices (ETA TBD)
                 // ttsProvider: "Elevenlabs",
