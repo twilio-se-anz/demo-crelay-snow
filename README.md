@@ -1,6 +1,24 @@
 # Simple Conversation Relay
 
-This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. IT is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
+This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
+
+## Release v2.4
+
+This release introduces a structured tool response system to improve tool integration and response handling:
+
+### Enhanced Tool Response Architecture
+- Implemented a standardized response format with `toolType` and `toolData` properties
+- Created a type-based routing system for different kinds of tool responses
+- Added support for four distinct response types: "tool", "crelay", "error", and "llm"
+- Improved separation between conversation flow and direct actions
+
+This architecture enables more flexible tool integration by clearly defining how each tool's response should be processed:
+- Standard tools return results to the LLM for conversational responses
+- Conversation Relay tools bypass the LLM for direct WebSocket communication
+- Error responses are handled gracefully within the conversation context
+- Future extensibility is built in with the reserved "llm" type
+
+The new system improves reliability, reduces complexity, and creates a clear separation of concerns between different types of tool operations.
 
 ## Release v2.3
 
@@ -18,6 +36,12 @@ When a user interrupts the AI during a response:
 2. ConversationRelayService processes this message and calls responseService.interrupt()
 3. ResponseService sets an isInterrupted flag that stops the current streaming response
 4. The system can then process the user's new input immediately
+
+The interrupt mechanism works by:
+- Setting the isInterrupted flag to true in the ResponseService
+- Breaking out of the streaming loop in generateResponse
+- Allowing the system to process the new user input
+- Automatically resetting the interrupt flag at the beginning of each new response generation
 
 This feature enables more natural conversations by allowing users to interrupt lengthy responses, correct misunderstandings immediately, or redirect the conversation without waiting for the AI to finish speaking.
 
@@ -232,14 +256,24 @@ This endpoint will handle incoming calls and establish the WebSocket connection 
    - Called number (`to`)
    - Call SID
    - Other call metadata
+   - Custom parameters (including callReference)
 
 3. The server then:
-   - Stores the call parameters for the session
-   - Initializes the ConversationRelayService with:
-     - OpenAI service for natural language processing
+   - Stores the call parameters for the session in a wsSessionsMap
+   - Retrieves any parameter data associated with the callReference
+   - Initializes the ResponseService with the specified context and tool manifest files
+   - Creates a ConversationRelayService instance with:
+     - ResponseService for LLM interactions
+     - Session data containing setup information and parameters
      - Silence handler for managing inactivity
    - Sets up event listeners for WebSocket communication
    - Begins processing incoming messages
+
+4. Session Management:
+   - Each WebSocket connection maintains its own isolated session
+   - Sessions are stored in a wsSessionsMap keyed by Call SID
+   - This enables multiple concurrent calls to be handled independently
+   - Each session has its own ResponseService and ConversationRelayService instances
 
 ### Important Note on WebSocket Implementation
 
@@ -295,18 +329,39 @@ Available tools:
 1. `end-call`
    - Gracefully terminates the current call
    - Used for normal call completion or error scenarios
+   - Returns a "crelay" type response that bypasses LLM processing
 
 2. `live-agent-handoff`
    - Transfers the call to a human agent
    - Required parameter: `callSid`
+   - Returns a "crelay" type response that bypasses LLM processing
 
 3. `send-dtmf`
    - Sends DTMF tones during the call
    - Useful for automated menu navigation
+   - Returns a "crelay" type response that bypasses LLM processing
 
 4. `send-sms`
    - Sends SMS messages during the call
    - Used for verification codes or follow-up information
+   - Returns a "tool" type response for LLM processing or "error" type if sending fails
+
+Each tool now returns a structured response with `toolType` and `toolData` properties that determine how the response is processed:
+
+```javascript
+{
+  toolType: "crelay", // Tool type identifier
+  toolData: {         // Tool-specific data
+    type: "end",
+    handoffData: {...}
+  }
+}
+```
+
+The ResponseService uses this structure to decide whether to:
+- Add the response to the conversation history for LLM processing ("tool" type)
+- Emit the response directly to the WebSocket for Conversation Relay actions ("crelay" type)
+- Add an error message to the conversation history ("error" type)
 
 The OpenAI service loads these tools during initialization and makes them available for use in conversations through OpenAI's function calling feature.
 
@@ -516,23 +571,114 @@ Error:
 
 ### Server Tools
 
-The server includes several built-in tools for call management:
+The server includes several built-in tools for call management, each implementing the new toolType/toolData pattern:
 
-1. `end-call`
+1. `end-call` (toolType: "crelay")
    - Gracefully terminates the current call
    - Used for normal call completion or error scenarios
+   - Returns a direct Conversation Relay message
 
-2. `live-agent-handoff`
+2. `live-agent-handoff` (toolType: "crelay")
    - Transfers the call to a human agent
    - Handles escalation scenarios
+   - Returns a direct Conversation Relay message
 
-3. `send-dtmf`
+3. `send-dtmf` (toolType: "crelay")
    - Sends DTMF tones during the call
    - Useful for automated menu navigation
+   - Returns a direct Conversation Relay message
 
-4. `send-sms`
+4. `send-sms` (toolType: "tool" or "error")
    - Sends SMS messages during the call
    - Used for verification codes or follow-up information
+   - Returns a standard tool response for LLM processing
+   - Returns an error response if SMS sending fails
+
+### Enhanced Tool Handling System
+
+The system implements a sophisticated tool handling mechanism that categorizes tool responses by type to determine appropriate processing:
+
+#### Tool Response Types
+
+Tools now return a structured response with `toolType` and `toolData` properties:
+
+```javascript
+{
+  toolType: "crelay", // Tool type identifier
+  toolData: {         // Tool-specific data
+    type: "end",
+    handoffData: {...}
+  }
+}
+```
+
+The system supports four distinct tool types:
+
+1. **tool** - Standard tools that return results to be consumed by the LLM:
+   - Results are added to conversation history
+   - LLM generates a response based on the tool result
+   - Example: `send-sms` returns confirmation message
+
+2. **crelay** - Conversation Relay specific tools:
+   - Results are emitted directly to the WebSocket
+   - Bypasses LLM processing
+   - Used for direct control actions like `send-dtmf` and `end-call`
+   - ConversationRelayService listens for these events and forwards them
+
+3. **error** - Error handling responses:
+   - Error messages are added to conversation history as system messages
+   - LLM can acknowledge and respond to the error
+   - Provides graceful error handling in conversations
+
+4. **llm** - LLM controller responses (not currently implemented):
+   - Would allow tools to modify LLM behavior
+   - Reserved for future expansion
+
+#### Implementation
+
+The ResponseService processes tool results based on their type:
+
+```javascript
+switch (toolResult.toolType) {
+  case "tool":
+    // Add to conversation history for LLM to process
+    this.promptMessagesArray.push({
+      role: "tool",
+      content: JSON.stringify(toolResult.toolData),
+      tool_call_id: toolCallObj.id
+    });
+    break;
+  case "crelay":
+    // Emit directly to ConversationRelayService
+    this.emit('responseService.toolResult', toolResult.toolData);
+    break;
+  case "error":
+    // Add as system message to conversation history
+    this.promptMessagesArray.push({
+      role: "system",
+      content: toolResult.toolData
+    });
+    break;
+}
+```
+
+The ConversationRelayService listens for tool results and processes them:
+
+```javascript
+this.responseService.on('responseService.toolResult', (toolResult) => {
+  // Check if the tool result is for the conversation relay
+  if (toolResult.toolType === "crelay") {
+    // Send the tool result to the WebSocket server
+    this.emit('conversationRelay.outgoingMessage', toolResult.toolData);
+  }
+});
+```
+
+This architecture enables:
+- Clear separation between conversation flow and direct actions
+- Proper handling of Conversation Relay specific commands
+- Flexible error handling within the conversation
+- Future extensibility for new tool types
 
 ### Server Services
 
