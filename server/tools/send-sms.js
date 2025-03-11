@@ -28,6 +28,6 @@ module.exports = async function (functionArguments) {
         toolType: "tool",
         toolData: `SMS sent to the number successfully to ${functionArguments.to}`
     }
-    logOut('SendSMS', `Ending the call with endResponseContent: ${JSON.stringify(response, null, 4)}`);
+    logOut('SendSMS', `Sent SMS: ${JSON.stringify(response, null, 4)}`);
     return response;
 }
