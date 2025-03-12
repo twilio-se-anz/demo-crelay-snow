@@ -346,6 +346,13 @@ class ResponseService extends EventEmitter {
                         toolResult = await calledTool(calledToolArgs);
                         logOut('ResponseService', `Conversational tool call result: ${JSON.stringify(toolResult, null, 4)}`);
 
+                        // Add assistant response and tool result to history
+                        this.promptMessagesArray.push({
+                            role: "assistant",
+                            content: fullResponse,
+                            tool_calls: [toolCallObj]
+                        });
+
                         /**
                          * There are different types of responses that can come back from the tools to indicate what needs to be done:
                          * 
@@ -362,7 +369,7 @@ class ResponseService extends EventEmitter {
                         switch (toolResult.toolType) {
                             case "tool":
                                 // Add the tool result to the conversation history
-                                logOut('ResponseService', `Tool selected data: ${JSON.stringify(toolResult.toolData)}`);
+                                logOut('ResponseService', `Tool selected data: ${JSON.stringify(toolResult)}`);
                                 this.promptMessagesArray.push({
                                     role: "tool",
                                     content: JSON.stringify(toolResult.toolData),
@@ -388,19 +395,6 @@ class ResponseService extends EventEmitter {
                     } catch (error) {
                         logError('ResponseService', `GenerateResponse, Error executing tool ${toolCallObj.function.name}:`, error);
                     }
-
-                    // Add assistant response and tool result to history
-                    this.promptMessagesArray.push({
-                        role: "assistant",
-                        content: fullResponse,
-                        tool_calls: [toolCallObj]
-                    });
-
-                    this.promptMessagesArray.push({
-                        role: "tool",
-                        content: JSON.stringify(toolResult.toolData),
-                        tool_call_id: toolCallObj.id
-                    });
 
                     // Continue the conversation with tool results
                     const followUpStream = await this.openai.chat.completions.create({
