@@ -362,7 +362,7 @@ class ResponseService extends EventEmitter {
                         switch (toolResult.toolType) {
                             case "tool":
                                 // Add the tool result to the conversation history
-                                logOut('ResponseService', `Tool selected: tool`);
+                                logOut('ResponseService', `Tool selected data: ${JSON.stringify(toolResult.toolData)}`);
                                 this.promptMessagesArray.push({
                                     role: "tool",
                                     content: JSON.stringify(toolResult.toolData),
@@ -398,7 +398,7 @@ class ResponseService extends EventEmitter {
 
                     this.promptMessagesArray.push({
                         role: "tool",
-                        content: JSON.stringify(toolResult),
+                        content: JSON.stringify(toolResult.toolData),
                         tool_call_id: toolCallObj.id
                     });
 
