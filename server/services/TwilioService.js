@@ -92,7 +92,8 @@ class TwilioService extends EventEmitter {
             const conversationRelay = connect.conversationRelay({
                 url: `wss://${serverBaseUrl}/conversation-relay`,
                 welcomeGreeting: "Hi! How can I help you today?",
-                transcriptionProvider: "deepgram",
+                transcriptionProvider: "Deepgram",
+                speechModel: "nova-3-general",
                 interruptible: "true",
 
                 // Google Journey Voices - Available today
