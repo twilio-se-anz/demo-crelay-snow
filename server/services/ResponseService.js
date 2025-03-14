@@ -334,12 +334,8 @@ class ResponseService extends EventEmitter {
                         }
                     };
 
-                    logOut('ResponseService', `Tool call collected: ${JSON.stringify(toolCallObj, null, 4)}`);
-
                     let toolResult = null;
                     try {
-                        logOut('ResponseService', `Executing tool start`);
-                        logOut('ResponseService', `Executing tool call: ${toolCallObj.function.name} with args: ${toolCallObj.function.arguments}`);
                         let calledTool = this.loadedTools[toolCallObj.function.name];
                         let calledToolArgs = JSON.parse(toolCallObj.function.arguments);
 
