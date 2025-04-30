@@ -6,9 +6,10 @@
  * @extends ResponseService
  */
 
-const OpenAI = require('openai');
-const { ResponseService } = require('./ResponseService');
-const { logOut } = require('../utils/logger');
+import OpenAI from 'openai';
+import { ResponseService } from './ResponseService.js';
+import { logOut } from '../utils/logger.js';
+
 const { OPENAI_API_KEY } = process.env;
 const { OPENAI_MODEL } = process.env;
 
@@ -27,4 +28,4 @@ class OpenAIService extends ResponseService {
     }
 }
 
-module.exports = { OpenAIService };
+export { OpenAIService };

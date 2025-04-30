@@ -1,14 +1,12 @@
-const { logOut, logError } = require('../utils/logger');
+import { logOut, logError } from '../utils/logger.js';
 
 /**
  * This is a CR specific tool type. It CR specific messages sent back via the Websocket.
  * 
- * NOTE: Using module.exports so we do not have to deal with names in the export.
- * 
  * @param {*} functionArguments 
  * @returns 
  */
-module.exports = function (functionArguments) {
+export default function (functionArguments) {
     logOut('EndCall', `End call function called with arguments: ${JSON.stringify(functionArguments)}`);
     const response = {
         toolType: "crelay",

@@ -48,13 +48,20 @@
  * - responseService.error: Error events
  */
 
-const EventEmitter = require('events');
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config();
+import { EventEmitter } from 'events';
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 
-const { logOut, logError } = require('../utils/logger');
+import { MCPClient } from '../mcp/McpClient.js';
+import { logOut, logError } from '../utils/logger.js';
 
+dotenv.config();
+
+// Get the directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 class ResponseService extends EventEmitter {
     /**
      * Creates a new ResponseService instance.
@@ -174,13 +181,43 @@ class ResponseService extends EventEmitter {
      * @param {string} toolManifestFile - Path to the new toolManifest.json file
      * @throws {Error} If file loading fails
      */
-    updateContextAndManifest(contextFile, toolManifestFile) {
+    async updateContextAndManifest(contextFile, toolManifestFile) {
         logOut('ResponseService', `Updating context with new files: ${contextFile}, ${toolManifestFile}`);
 
         try {
             // Load new context and tool manifest from provided file paths
             const context = fs.readFileSync(path.join(__dirname, `../assets/${contextFile}`), 'utf8');
-            const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
+            // const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
+
+            /*****************************************
+             *          MCP Tools
+             ****************************************/
+            const mcpClient = new MCPClient();
+            try {
+                logOut('ResponseService', `Connecting to MCP server...`);
+                await mcpClient.connectToMcpServer();
+                // await mcpClient.listTools();
+                // Get the tool executor
+                const mcpToolExecutor = mcpClient.getToolExecutor();
+                if (!mcpToolExecutor) {
+                    logError('ResponseService', `Tool executor not initialized. Please ensure MCP server is connected and tools are loaded.`);
+                    return;
+                }
+                // Convert MCP tools to OpenAI tools
+                const tools = mcpClient.convertToOpenAiTools();
+                if (!tools) {
+                    logError('ResponseService', `No tools available or failed to convert. Please ensure MCP server is connected and tools are loaded.`);
+                    return;
+                }
+
+                const toolManifest = {
+                    tools: tools
+                };
+                logOut('ResponseService', `Loaded ${toolManifest.tools.length} tools from MCP server`);
+            } catch (error) {
+                logError('ResponseService', `Error connecting to MCP server:`, error);
+                return;
+            }
 
             // Reset conversation history and initialize with new system context
             this.promptMessagesArray = [{
@@ -196,9 +233,11 @@ class ResponseService extends EventEmitter {
             this.loadedTools = {};
 
             logOut('ResponseService', `Reloading tools...`);
-            this.toolDefinitions.forEach((tool) => {
+            this.toolDefinitions.forEach(async (tool) => {
                 let functionName = tool.function.name;
-                this.loadedTools[functionName] = require(`../tools/${functionName}`);
+                // Dynamic import for ES modules
+                const toolModule = await import(`../tools/${functionName}.js`);
+                this.loadedTools[functionName] = toolModule.default;
                 logOut('ResponseService', `Loaded function: ${functionName}`);
             });
             logOut('ResponseService', `Loaded ${this.toolDefinitions.length} tools`);
@@ -438,4 +477,4 @@ class ResponseService extends EventEmitter {
     }
 }
 
-module.exports = { ResponseService };
+export { ResponseService };

@@ -68,9 +68,9 @@
  * relayService.cleanup();
  */
 
-const EventEmitter = require('events');
-const { SilenceHandler } = require('./SilenceHandler');
-const { logOut, logError } = require('../utils/logger');
+import { EventEmitter } from 'events';
+import { SilenceHandler } from './SilenceHandler.js';
+import { logOut, logError } from '../utils/logger.js';
 
 const {
     TWILIO_FUNCTIONS_URL
@@ -251,4 +251,4 @@ class ConversationRelayService extends EventEmitter {
     }
 }
 
-module.exports = { ConversationRelayService };
+export { ConversationRelayService };

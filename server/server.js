@@ -6,9 +6,18 @@
  * @requires express-ws
  */
 
-require('dotenv').config();
-const express = require('express');
-const ExpressWs = require('express-ws');
+import dotenv from 'dotenv';
+import express from 'express';
+import ExpressWs from 'express-ws';
+import { logOut, logError } from './utils/logger.js';
+
+// Import the services
+import { ConversationRelayService } from './services/ConversationRelayService.js';
+import { OpenAIService } from './services/OpenAIService.js';
+import { DeepSeekService } from './services/DeepSeekService.js';
+import { TwilioService } from './services/TwilioService.js';
+
+dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 let serverBaseUrl = process.env.SERVER_BASE_URL || "localhost"; // Store server URL
@@ -16,14 +25,6 @@ ExpressWs(app);     // Initialize express-ws
 
 app.use(express.urlencoded({ extended: true }));    // For Twilio url encoded body
 app.use(express.json());    // For JSON payloads
-
-const { logOut, logError } = require('./utils/logger');
-
-// Import the services
-const { ConversationRelayService } = require('./services/ConversationRelayService');
-const { OpenAIService } = require('./services/OpenAIService');
-const { DeepSeekService } = require('./services/DeepSeekService');
-const { TwilioService } = require('./services/TwilioService');
 
 /**
  * This parameterDataMap illustrates how you would pass data via Conversation Relay Parameters.

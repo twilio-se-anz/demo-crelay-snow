@@ -1,6 +1,6 @@
-const twilio = require('twilio');
-const EventEmitter = require('events');
-const { logOut, logError } = require('../utils/logger');
+import twilio from 'twilio';
+import { EventEmitter } from 'events';
+import { logOut, logError } from '../utils/logger.js';
 
 /**
  * Service class for handling Twilio-related operations including making calls, sending SMS and generating TwiML for the Conversation Relay service.
@@ -18,6 +18,7 @@ class TwilioService extends EventEmitter {
         this.authToken = process.env.AUTH_TOKEN;
         this.fromNumber = process.env.FROM_NUMBER;
         this.twilioClient = twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
+        // this.twilioClient = twilio(process.env.API_KEY, process.env.API_SECRET, { process.env.ACCOUNT_SID });    // Some issue here with the API key and secret
     }
 
     /**
@@ -139,4 +140,4 @@ class TwilioService extends EventEmitter {
     }
 }
 
-module.exports = { TwilioService };
+export { TwilioService };

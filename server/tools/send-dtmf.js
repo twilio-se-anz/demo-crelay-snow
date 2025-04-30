@@ -1,4 +1,4 @@
-const { logOut, logError } = require('../utils/logger');
+import { logOut, logError } from '../utils/logger.js';
 
 /**
  * This is a CR specific tool type. It CR specific messages sent back via the Websocket.
@@ -6,7 +6,7 @@ const { logOut, logError } = require('../utils/logger');
  * @param {*} functionArguments 
  * @returns 
  */
-module.exports = function (functionArguments) {
+export default function (functionArguments) {
     logOut('SendDTMF', `Send dtmf function called with arguments: ${JSON.stringify(functionArguments)}`);
     const response = {
         toolType: "crelay",

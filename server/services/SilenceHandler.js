@@ -52,7 +52,7 @@
  * - 'prompt': Interactive prompts (resets silence timer)
  */
 
-const { logOut, logError } = require('../utils/logger');
+import { logOut, logError } from '../utils/logger.js';
 
 const {
     SILENCE_SECONDS_THRESHOLD = 20,
@@ -169,4 +169,4 @@ class SilenceHandler {
     }
 }
 
-module.exports = { SilenceHandler };
+export { SilenceHandler };

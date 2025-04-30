@@ -4,10 +4,10 @@
  * Although the actual SMS API code could be inserted directly here, we are using the common TwilioService instead, to send the SMS to keep the code contained.
  * 
  */
-const { logOut, logError } = require('../utils/logger');
-const { TwilioService } = require('../services/TwilioService');
+import { logOut, logError } from '../utils/logger.js';
+import { TwilioService } from '../services/TwilioService.js';
 
-module.exports = async function (functionArguments) {
+export default async function (functionArguments) {
     logOut('SendSMS', `Send SMS function called with arguments: ${JSON.stringify(functionArguments)}`);
     const twilioService = new TwilioService();
 

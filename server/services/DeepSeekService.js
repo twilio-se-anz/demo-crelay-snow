@@ -6,9 +6,10 @@
  * @extends ResponseService
  */
 
-const OpenAI = require('openai');
-const { ResponseService } = require('./ResponseService');
-const { logOut } = require('../utils/logger');
+import OpenAI from 'openai';
+import { ResponseService } from './ResponseService.js';
+import { logOut } from '../utils/logger.js';
+
 const { DEEPSEEK_API_KEY } = process.env;
 const { DEEPSEEK_MODEL } = process.env;
 
@@ -30,4 +31,4 @@ class DeepSeekService extends ResponseService {
     }
 }
 
-module.exports = { DeepSeekService };
+export { DeepSeekService };

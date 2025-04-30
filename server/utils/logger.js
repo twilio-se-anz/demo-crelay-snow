@@ -25,7 +25,7 @@ const logError = (identifier, message) => {
     console.error(`${colors.red}[${getSydneyTimestamp()}] [${identifier}] ${message}${colors.reset}`);
 };
 
-module.exports = {
+export {
     logOut,
     logError
 };
