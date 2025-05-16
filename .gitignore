@@ -4,3 +4,8 @@ server/node_modules/.modules.yaml
 server/node_modules
 server/.env
 
+mcp-server/pnpm-lock.yaml
+mcp-server/node_modules/.modules.yaml
+mcp-server/node_modules
+mcp-server/.env
+mcp-server/build
