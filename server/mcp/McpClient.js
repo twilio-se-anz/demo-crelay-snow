@@ -35,7 +35,7 @@ class MCPClient {
         this.transport = null;
         this.toolsResult = null;
         this.toolExecutor = null;
-        this.mcpClient = new Client({ name: "typescript-mcp-client", version: "0.0.1" });
+        this.mcpClient = new Client({ name: "conversation-relay-mcp-client", version: "0.0.1" });
     }
     // Connect to the MCP server
     async connectToMcpServer() {
@@ -45,7 +45,7 @@ class MCPClient {
         // Create the MCP transport to the Server
         this.transport = new StdioClientTransport({
             command: "npx",
-            args: ["@deshartman/twilio-messaging-mcp-server", ACCOUNT_SID, API_KEY, API_SECRET, TWILIO_NUMBER],
+            args: [MCP_SERVER, ACCOUNT_SID, API_KEY, API_SECRET, TWILIO_NUMBER],
             env: {
                 ...process.env, // Pass all environment variables to the server
                 "NGROK_AUTH_TOKEN": NGROK_AUTH_TOKEN,

@@ -53,14 +53,21 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+
+import { MCPClient } from '../mcp/McpClient.js';
 import { logOut, logError } from '../utils/logger.js';
+
+import OpenAI from 'openai';
+const { OPENAI_API_KEY } = process.env;
+const { OPENAI_MODEL } = process.env;
+
 
 dotenv.config();
 
 // Get the directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-class ResponseService extends EventEmitter {
+class MCPResponseService extends EventEmitter {
     /**
      * Creates a new ResponseService instance.
      * Initializes client, loads tools from manifest, and sets up initial state.
@@ -80,6 +87,10 @@ class ResponseService extends EventEmitter {
 
         // Initialize context and tools using updateContext
         this.updateContextAndManifest(contextFile, toolManifestFile);
+
+        this.openai = new OpenAI();
+        this.model = OPENAI_MODEL;
+        logOut('OpenAIService', 'Initialized');
     }
 
     /**
@@ -184,8 +195,45 @@ class ResponseService extends EventEmitter {
 
         try {
             // Load new context and tool manifest from provided file paths
-            const context = fs.readFileSync(path.join(__dirname, `../assets/${contextFile}`), 'utf8');
-            const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
+            // const context = fs.readFileSync(path.join(__dirname, `../assets/${contextFile}`), 'utf8');
+            // const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
+
+            /*********************************************
+             * MCP Server loading
+             * 
+             * We are using the MCP server to load the context and tools dynamically. The intention is that the customer will have a 
+             * MCP server to outline thier required context for Conversation Relay and the tools that are available to the system..
+             */
+
+            /*****************************************
+             *          MCP Tools
+             ****************************************/
+            const mcpClient = new MCPClient();
+            try {
+                logOut('ResponseService', `Connecting to MCP server...`);
+                await mcpClient.connectToMcpServer();
+                // await mcpClient.listTools();
+                // Get the tool executor
+                const mcpToolExecutor = mcpClient.getToolExecutor();
+                if (!mcpToolExecutor) {
+                    logError('ResponseService', `Tool executor not initialized. Please ensure MCP server is connected and tools are loaded.`);
+                    return;
+                }
+                // Convert MCP tools to OpenAI tools
+                const tools = mcpClient.convertToOpenAiTools();
+                if (!tools) {
+                    logError('ResponseService', `No tools available or failed to convert. Please ensure MCP server is connected and tools are loaded.`);
+                    return;
+                }
+
+                const toolManifest = {
+                    tools: tools
+                };
+                logOut('ResponseService', `Loaded ${toolManifest.tools.length} tools from MCP server`);
+            } catch (error) {
+                logError('ResponseService', `Error connecting to MCP server:`, error);
+                return;
+            }
 
             // Reset conversation history and initialize with new system context
             this.promptMessagesArray = [{
@@ -445,4 +493,4 @@ class ResponseService extends EventEmitter {
     }
 }
 
-export { ResponseService };
+export { MCPResponseService };

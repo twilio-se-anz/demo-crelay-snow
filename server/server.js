@@ -16,6 +16,7 @@ import { ConversationRelayService } from './services/ConversationRelayService.js
 import { OpenAIService } from './services/OpenAIService.js';
 import { DeepSeekService } from './services/DeepSeekService.js';
 import { TwilioService } from './services/TwilioService.js';
+import { MCPResponseService } from './services/MCPResponseService.js';
 
 dotenv.config();
 const app = express();
@@ -91,8 +92,9 @@ app.ws('/conversation-relay', (ws) => {
 
                 // Create new response Service.
                 logOut('WS', `Creating Response Service`);
-                const sessionResponseService = new OpenAIService(contextFile, toolManifestFile);
+                // const sessionResponseService = new OpenAIService(contextFile, toolManifestFile);
                 // const sessionResponseService = new DeepSeekService();
+                const sessionResponseService = new MCPResponseService();
 
                 // Add an event listener for the response service for this particular session based on the call SID. This allows any endpoint to send a message to Session Response Service.
                 sessionResponseService.on(`responseService.${message.callSid}`, (responseMessage) => {
