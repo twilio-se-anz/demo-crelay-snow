@@ -96,18 +96,13 @@ class TwilioService extends EventEmitter {
                 transcriptionProvider: "Deepgram",
                 speechModel: "nova-3-general",
                 interruptible: "true",
-
                 // Google Journey Voices - Available today
-                voice: "en-AU-Journey-D",
-
+                // voice: "en-AU-Journey-D",
                 // 11Labs voices (ETA TBD)
-                // ttsProvider: "Elevenlabs",
-                // voice: "Charlie-flash_v2_5",
-
-
+                ttsProvider: "Elevenlabs",
+                voice: "Charlie-flash_v2_5",
                 dtmfDetection: "true",
-                interruptByDtmf: "true",
-                debug: "true"
+                interruptible: "any",      // DTMF & Speech interruptible
             });
 
             conversationRelay.parameter(
