@@ -54,7 +54,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 
-import { MCPClient } from '../mcp/McpClient.js';
+// import { MCPClient } from '../mcp/McpClient.js';
 import { logOut, logError } from '../utils/logger.js';
 
 dotenv.config();
@@ -187,7 +187,8 @@ class ResponseService extends EventEmitter {
         try {
             // Load new context and tool manifest from provided file paths
             const context = fs.readFileSync(path.join(__dirname, `../assets/${contextFile}`), 'utf8');
-            const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
+            const toolManifestPath = path.join(__dirname, `../assets/${toolManifestFile}`);
+            const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8'));
 
             // Reset conversation history and initialize with new system context
             this.promptMessagesArray = [{
