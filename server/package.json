@@ -2,11 +2,12 @@
   "name": "simple-conversation-relay-server",
   "version": "2.2.0",
   "description": "WebSocket server for conversation relay",
-  "main": "server.js",
+  "main": "dist/server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only --esm src/server.ts"
   },
   "keywords": [],
   "author": "Des Hartman",
@@ -23,6 +24,10 @@
     "twilio": "^5.4.4"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "@types/express": "^5.0.2",
+    "@types/express-ws": "^3.0.5",
+    "@types/node": "^22.15.19",
+    "nodemon": "^3.0.2",
+    "ts-node-dev": "^2.0.0"
   }
 }
