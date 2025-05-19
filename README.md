@@ -427,41 +427,36 @@ To deploy the server to Fly.io, follow these steps:
 cd server
 ```
 
-2. For new deployments, use the `fly launch` command:
+2. For new deployments, use the `--no-deploy` option to create a new Fly.io app without deploying it immediately. This allows you to configure your app before the first deployment:
 ```bash
-fly launch
-```
-
-3. Import your environment variables as secrets:
-```bash
-fly secrets import < .env
+fly launch --no-deploy
 ```
 Note: Make sure to update your `SERVER_BASE_URL` in the .env file to use your Fly.io app's hostname without the "https://" prefix.
 
-4. Ensure your `fly.toml` file has the correct port configuration:
+3. Ensure your `fly.toml` file has the correct port configuration:
 ```toml
 [http]
   internal_port = 3001  # Make sure this matches your application port
 ```
 
-5. Create a static volume to store your assets. This ensures your context and manifest files persist across deployments:
-```bash
-fly volume create assets -r lax -n=1
-```
-
-6. Add the volume mount configuration to your `fly.toml` file:
+4. Add the volume mount configuration to your `fly.toml` file:
 ```toml
 [mounts]
   source = "assets"
   destination = "/assets"
 ```
 
-7. Deploy your application:
+5. Import your environment variables as secrets:
+```bash
+fly secrets import < .env
+```
+
+6. Now deploy your application and check the logs to make sure it is up and running.
 ```bash
 fly deploy
 ```
 
-8. Verify your context and manifest files are in the mount by logging into the machine:
+7. Verify your context and manifest files are in the mount by logging into the machine:
 ```bash
 fly ssh console
 cd /assets
@@ -469,6 +464,9 @@ ls
 ```
 
 This will show your context and manifest files in the mounted volume.
+
+8. Finally, check that the server is reachable and up by going to the fly.io base directory set above for SERVER_BASE_URL in a browser. You should get "WebSocket Server Running" as a response.
+
 
 ## Dependencies
 
