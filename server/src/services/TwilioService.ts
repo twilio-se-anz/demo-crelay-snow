@@ -112,14 +112,10 @@ class TwilioService extends EventEmitter {
                 welcomeGreeting: "Hi! How can I help you today?",
                 transcriptionProvider: "Deepgram",
                 speechModel: "nova-3-general",
-                interruptible: "true",
-                // Google Journey Voices - Available today
-                // voice: "en-AU-Journey-D",
-                // 11Labs voices (ETA TBD)
+                interruptible: "any",
                 ttsProvider: "Elevenlabs",
                 voice: "Charlie-flash_v2_5",
-                dtmfDetection: true,
-                // DTMF & Speech interruptible
+                dtmfDetection: true, // DTMF & Speech interruptible
             } as any);
 
             conversationRelay.parameter(

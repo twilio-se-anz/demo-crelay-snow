@@ -2,106 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v2.4
+## Release v3.0
 
-NOTE: - Updated the Voices in the TwilioService.js file to reflect What is available now as of March 2025. New 11Labs voices are coming soon.
-
-This release introduces a structured tool response system to improve tool integration and response handling:
-
-### Enhanced Tool Response Architecture
-- Implemented a standardized response format with `toolType` and `toolData` properties
-- Created a type-based routing system for different kinds of tool responses
-- Added support for four distinct response types: "tool", "crelay", "error", and "llm"
-- Improved separation between conversation flow and direct actions
-
-This architecture enables more flexible tool integration by clearly defining how each tool's response should be processed:
-- Standard tools return results to the LLM for conversational responses
-- Conversation Relay tools bypass the LLM for direct WebSocket communication
-- Error responses are handled gracefully within the conversation context
-- Future extensibility is built in with the reserved "llm" type
-
-The new system improves reliability, reduces complexity, and creates a clear separation of concerns between different types of tool operations.
-
-## Release v2.3
-
-This release adds interrupt handling capabilities to improve the conversational experience:
-
-### Interrupt Handling
-- Added support for handling user interruptions during AI responses
-- Implemented interrupt detection and processing in ConversationRelayService
-- Added interrupt() and resetInterrupt() methods to ResponseService for controlling response streaming
-- Enhanced streaming response generation to check for interruptions and stop gracefully
-- Improved user experience by allowing natural conversation flow with interruptions
-
-When a user interrupts the AI during a response:
-1. The system detects the interruption and sends an 'interrupt' message with the partial utterance
-2. ConversationRelayService processes this message and calls responseService.interrupt()
-3. ResponseService sets an isInterrupted flag that stops the current streaming response
-4. The system can then process the user's new input immediately
-
-The interrupt mechanism works by:
-- Setting the isInterrupted flag to true in the ResponseService
-- Breaking out of the streaming loop in generateResponse
-- Allowing the system to process the new user input
-- Automatically resetting the interrupt flag at the beginning of each new response generation
-
-This feature enables more natural conversations by allowing users to interrupt lengthy responses, correct misunderstandings immediately, or redirect the conversation without waiting for the AI to finish speaking.
-
-## Release v2.2
-
-This release adds the ability to dynamically update conversation contexts and tool manifests during an active call:
-
-### Dynamic Context & Manifest Updates
-- Added new `/updateResponseService` endpoint to change conversation context and tool manifest files during active calls
-- Enables real-time switching between different conversation scenarios without ending the call
-- Supports seamless transitions between different AI behaviors and tool sets
-
-#### Using the Update Endpoint
-
-To update the context and manifest files for an active call, send a POST request to the `/updateResponseService` endpoint:
-
-```bash
-curl -X POST \
-  'https://your-server-url/updateResponseService' \
-  --header 'Content-Type: application/json' \
-  --data-raw '{
-    "callSid": "CA1234...",           # The active call's SID
-    "contextFile": "MyContext.md",     # New context file to load
-    "toolManifestFile": "MyToolManifest.json"  # New tool manifest to load
-  }'
-```
-
-This allows you to:
-- Switch conversation contexts mid-call
-- Update available tools based on conversation flow
-- Adapt AI behavior for different phases of the call
-- Maintain call continuity while changing conversation parameters
-
-## Release v2.1
-
-This release brings significant enhancements to the conversation relay system:
-
-### Dynamic Context & Manifest Loading
-- Implemented a flexible context loading system that allows switching conversation contexts and tool sets at runtime
-- Added support for multiple context files (e.g., defaultContext.md, MyContext.md) to handle different use cases
-- Enhanced tool manifest system with dynamic loading capabilities, allowing tools to be loaded based on context
-- Environment variables (LLM_CONTEXT, LLM_MANIFEST) now control which context and tools are loaded
-- Improved separation of concerns by isolating different conversation scenarios with their own contexts
-
-### Added DeepSeek Response Service
-- Integrated DeepSeek as an alternative LLM provider alongside OpenAI
-- Implemented DeepSeekService extending the base ResponseService for consistent behavior
-- Added configuration support through DEEPSEEK_API_KEY and DEEPSEEK_MODEL environment variables
-- Maintains full compatibility with existing tool execution and conversation management features
-- Enables easy switching between LLM providers through service configuration
-
-### Added Twilio Status Callback Endpoint
-- New `/twilioStatusCallback` endpoint for handling Twilio event notifications
-- Real-time status updates are now propagated to the conversation context
-- Implemented event-based system to route callbacks to appropriate conversation sessions
-- Status updates are automatically inserted into conversation context for LLM awareness
-- Enhanced call monitoring and state management through Twilio's callback system
-
+This project has been converted from JavaScript to TypeScript. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
 1. There is a main Server that has two functions:
    - It is a WebSocket server - The Websocket server maintains a connection and relays messages between the two parties. It is the core of the conversation relay system.
@@ -118,21 +21,21 @@ This release brings significant enhancements to the conversation relay system:
    **_Tools_** - The Tools section contains tool definitions that are used by the OpenAI service. The tools are loaded dynamically based on the toolManifest.json file, so ensure these are aligned. This is a simple implementation and can be expanded to include more complex tools and as mentioned there are Conversation Relay specific tools like send-dtmf and generic tools like send-sms included.
 
 ## Quick Tip
-Configure your Conversation Relay parameters in server/services/twilioService.js
+Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
 
-```javascript
+```typescript
       // Generate the Twiml we will need once the call is connected. Note, this could be done in two steps via the server, were we set a url: instead of twiml:, but this just seemed overly complicated.
       const response = new twilio.twiml.VoiceResponse();
       const connect = response.connect();
       const conversationRelay = connect.conversationRelay({
             url: `wss://${serverBaseUrl}/conversation-relay`,
             transcriptionProvider: "deepgram",
-            voice: "en-AU-Journey-D",
+            speechModel: "nova-3-general",
+            interruptible: "any",
             ttsProvider: "Elevenlabs",
-            voice: "Jessica-flash_v2_5",
-            dtmfDetection: "true",
-            interruptByDtmf: "true",
-      });
+            voice: "Charlie-flash_v2_5",
+            dtmfDetection: true,
+      } as any);
 
       conversationRelay.parameter({
             name: 'callReference',
@@ -145,6 +48,7 @@ Configure your Conversation Relay parameters in server/services/twilioService.js
 - Node.js v18
 - pnpm
 - ngrok
+- TypeScript
 
 ## Project Structure
 
@@ -153,26 +57,29 @@ Configure your Conversation Relay parameters in server/services/twilioService.js
 ├── server/                # WebSocket server for conversation relay
 │   ├── .env.example      # Example environment configuration
 │   ├── package.json      # Server dependencies and scripts
-│   ├── server.js         # Main server implementation
+│   ├── tsconfig.json     # TypeScript configuration
+│   ├── server.ts         # Main server implementation
 │   ├── assets/           # Configuration assets
 │   │   ├── defaultContext.md    # Default GPT conversation context
 │   │   ├── defaultToolManifest.json # Default available tools configuration
 │   │   ├── MyContext.md        # Specific context
 │   │   └── MyToolManifest.json # Specific tools
-│   ├── services/         # Core service implementations
-│   │   ├── ConversationRelayService.js
-│   │   ├── OpenAIService.js
-│   │   ├── DeepSeekService.js
-│   │   ├── ResponseService.js
-│   │   ├── SilenceHandler.js
-│   │   └── TwilioService.js
-│   ├── tools/           # Tool implementations
-│   │   ├── end-call.js
-│   │   ├── live-agent-handoff.js
-│   │   ├── send-dtmf.js
-│   │   └── send-sms.js
-│   └── utils/           # Utility functions
-│       └── logger.js
+│   ├── src/              # Source code directory
+│   │   ├── server.ts     # Main server implementation
+│   │   ├── services/     # Core service implementations
+│   │   │   ├── ConversationRelayService.ts
+│   │   │   ├── DeepSeekService.ts
+│   │   │   ├── OpenAIService.ts
+│   │   │   ├── ResponseService.ts
+│   │   │   ├── SilenceHandler.ts
+│   │   │   └── TwilioService.ts
+│   │   ├── tools/        # Tool implementations
+│   │   │   ├── end-call.ts
+│   │   │   ├── live-agent-handoff.ts
+│   │   │   ├── send-dtmf.ts
+│   │   │   └── send-sms.ts
+│   │   └── utils/        # Utility functions
+│   │       └── logger.ts
 ```
 
 ## Server Component
@@ -230,7 +137,7 @@ The silence handling is modular and follows separation of concerns:
 - `SilenceHandler` class manages the logic independently
 - Messages are passed back to the server via callbacks
 - The server maintains control of WebSocket communication
-- Thresholds are configurable through constants in server.js
+- Thresholds are configurable through constants in server.ts
 
 This design ensures reliable conversation flow while preventing indefinite silence periods, improving the overall user experience.
 
@@ -285,7 +192,7 @@ This endpoint will handle incoming calls and establish the WebSocket connection 
 2. Using await in the main connection handler could cause you to miss messages
 3. Example of correct implementation:
 
-```javascript
+```typescript
 // INCORRECT - Don't do this
 app.ws('/conversation-relay', async (ws, req) => {
     await someAsyncOperation(); // This could cause missed messages
@@ -350,7 +257,7 @@ Available tools:
 
 Each tool now returns a structured response with `toolType` and `toolData` properties that determine how the response is processed:
 
-```javascript
+```typescript
 {
   toolType: "crelay", // Tool type identifier
   toolData: {         // Tool-specific data
@@ -482,13 +389,14 @@ POST /outboundCall
 
 #### Request Format
 
-```json
-{
-  "properties": {
-    "phoneNumber": "+1234567890",      // [REQUIRED] Destination phone number in E.164 format
-    "callReference": "abc123",      // [OPTIONAL] Unique reference to associate with the call
-    "firstname": "Bob",                 // [OPTIONAL] Additional parameter data
-    "lastname": "Jones"                 // [OPTIONAL] Additional parameter data
+```typescript
+interface RequestData {
+  properties: {
+    phoneNumber: string;      // [REQUIRED] Destination phone number in E.164 format
+    callReference: string;    // [OPTIONAL] Unique reference to associate with the call
+    firstname?: string;       // [OPTIONAL] Additional parameter data
+    lastname?: string;        // [OPTIONAL] Additional parameter data
+    [key: string]: any;       // Other optional parameters
   }
 }
 ```
@@ -514,12 +422,12 @@ curl -X POST \
 The system uses a reference mechanism to maintain context and pass parameters throughout the call lifecycle:
 
 1. **Initial Storage**: When the outbound call endpoint is hit, all provided parameter data is stored in a `parameterDataMap` using the reference as the key:
-   ```javascript
+   ```typescript
    parameterDataMap.set(requestData.callReference, { requestData });
    ```
 
 2. **Conversation Relay Parameter**: The reference is passed to the Conversation Relay service as a parameter:
-   ```javascript
+   ```typescript
    conversationRelay.parameter({
      name: 'callReference',
      value: callReference
@@ -602,13 +510,10 @@ The system implements a sophisticated tool handling mechanism that categorizes t
 
 Tools now return a structured response with `toolType` and `toolData` properties:
 
-```javascript
-{
-  toolType: "crelay", // Tool type identifier
-  toolData: {         // Tool-specific data
-    type: "end",
-    handoffData: {...}
-  }
+```typescript
+interface ToolResult {
+  toolType: string;
+  toolData: any;
 }
 ```
 
@@ -638,7 +543,7 @@ The system supports four distinct tool types:
 
 The ResponseService processes tool results based on their type:
 
-```javascript
+```typescript
 switch (toolResult.toolType) {
   case "tool":
     // Add to conversation history for LLM to process
@@ -650,7 +555,7 @@ switch (toolResult.toolType) {
     break;
   case "crelay":
     // Emit directly to ConversationRelayService
-    this.emit('responseService.toolResult', toolResult.toolData);
+    this.emit('responseService.toolResult', toolResult);
     break;
   case "error":
     // Add as system message to conversation history
@@ -664,8 +569,8 @@ switch (toolResult.toolType) {
 
 The ConversationRelayService listens for tool results and processes them:
 
-```javascript
-this.responseService.on('responseService.toolResult', (toolResult) => {
+```typescript
+this.responseService.on('responseService.toolResult', (toolResult: ToolResult) => {
   // Check if the tool result is for the conversation relay
   if (toolResult.toolType === "crelay") {
     // Send the tool result to the WebSocket server
