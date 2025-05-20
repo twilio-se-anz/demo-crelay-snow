@@ -98,8 +98,9 @@ cd server
 pnpm install
 ```
 
-3. Start the development server:
+3. Build & Start the development server:
 ```bash
+pnpm build
 pnpm dev
 ```
 
