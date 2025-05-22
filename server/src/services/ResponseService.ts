@@ -54,6 +54,9 @@ import path from 'path';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
 
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
 // import { MCPClient } from '../mcp/McpClient';
 import { logOut, logError } from '../utils/logger.js';
 
@@ -251,12 +254,16 @@ class ResponseService extends EventEmitter {
     async updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void> {
         logOut('ResponseService', `Updating context with new files: ${contextFile}, ${toolManifestFile}`);
 
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
+
         try {
             // Load new context and tool manifest from provided file paths
-            const assetsDir = path.join(process.cwd(), 'server', 'assets');
+            const assetsDir = path.join(__dirname, '..', 'assets'); // Go up one level from dist/ to find assets/
             const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
             const toolManifestPath = path.join(assetsDir, toolManifestFile);
             const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: OpenAI.ChatCompletionTool[] };
+
 
             // Reset conversation history and initialize with new system context
             this.promptMessagesArray = [{
