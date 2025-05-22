@@ -260,8 +260,11 @@ class ResponseService extends EventEmitter {
         try {
             // Load new context and tool manifest from provided file paths
             const assetsDir = path.join(__dirname, '..', '..', 'assets');
-            const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
+            logOut('ResponseService', `Loading context and tool manifest from: ${assetsDir}`);
             const toolManifestPath = path.join(assetsDir, toolManifestFile);
+            logOut('ResponseService', `Loading tool manifest from: ${toolManifestPath}`);
+
+            const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
             const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: OpenAI.ChatCompletionTool[] };
 
 
@@ -283,7 +286,7 @@ class ResponseService extends EventEmitter {
                 let functionName = tool.function.name;
                 try {
                     // Dynamic import for ES modules
-                    const toolsDir = path.join(__dirname, '..', '..', 'tools');
+                    const toolsDir = path.join(__dirname, '..', 'tools');
                     const toolModule = await import(path.join(toolsDir, `${functionName}.js`));
                     this.loadedTools[functionName] = toolModule.default;
                     logOut('ResponseService', `Loaded function: ${functionName}`);
