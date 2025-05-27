@@ -10,9 +10,6 @@ import OpenAI from 'openai';
 import { ResponseService } from './ResponseService.js';
 import { logOut } from '../utils/logger.js';
 
-const { OPENAI_API_KEY } = process.env;
-const { OPENAI_MODEL } = process.env;
-
 class OpenAIService extends ResponseService {
     /**
      * Creates a new OpenAIService instance.
@@ -23,7 +20,7 @@ class OpenAIService extends ResponseService {
     constructor() {
         super();
         this.openai = new OpenAI();
-        this.model = OPENAI_MODEL;
+        this.model = process.env.OPENAI_MODEL || 'gpt-4';
         logOut('OpenAIService', 'Initialized');
     }
 }

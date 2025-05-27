@@ -52,32 +52,90 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import OpenAI from 'openai';
+
 import { fileURLToPath } from 'url';
-import { MCPClient } from '../mcp/McpClient.js';
+import { dirname } from 'path';
+
+// import { MCPClient } from '../mcp/McpClient';
 import { logOut, logError } from '../utils/logger.js';
 
 dotenv.config();
 
-// Get the directory name in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/**
+ * Interface for content response
+ */
+interface ContentResponse {
+    type: string;
+    token: string;
+    last: boolean;
+}
+
+/**
+ * Interface for tool result
+ */
+interface ToolResult {
+    toolType: string;
+    toolData: any;
+}
+
+/**
+ * Type for loaded tool function
+ */
+type ToolFunction = (args: any) => Promise<ToolResult> | ToolResult;
+
+/**
+ * Interface for OpenAI tool call
+ */
+interface OpenAIToolCall {
+    id?: string;
+    type?: string;
+    function?: {
+        name?: string;
+        arguments?: string;
+    };
+}
+
+/**
+ * Interface for our internal tool call representation
+ */
+interface ToolCall {
+    id: string;
+    type: string;
+    function: {
+        name: string;
+        arguments: string;
+    };
+}
+
 class ResponseService extends EventEmitter {
+    protected openai: OpenAI;
+    protected model: string;
+    protected promptMessagesArray: OpenAI.ChatCompletionMessageParam[];
+    protected isInterrupted: boolean;
+    protected toolManifest: { tools: OpenAI.ChatCompletionTool[] };
+    protected toolDefinitions: OpenAI.ChatCompletionTool[];
+    protected loadedTools: Record<string, ToolFunction>;
+
     /**
      * Creates a new ResponseService instance.
      * Initializes client, loads tools from manifest, and sets up initial state.
      * 
-     * @param {string} contextFile - Path to the context.md file
-     * @param {string} toolManifestFile - Path to the toolManifest.json file
      * @throws {Error} If tool loading fails
      */
     constructor() {
         super();
+        this.openai = new OpenAI();
+        this.model = "";
         this.promptMessagesArray = [];
         this.isInterrupted = false;
+        this.toolManifest = { tools: [] };
+        this.toolDefinitions = [];
+        this.loadedTools = {};
 
         // Which Context, Tool Manifest to use for this call (or the default)
-        const contextFile = process.env.LLM_CONTEXT || 'defaultContext.md'
-        const toolManifestFile = process.env.LLM_MANIFEST || 'defaultToolManifest.json'
+        const contextFile = process.env.LLM_CONTEXT || 'defaultContext.md';
+        const toolManifestFile = process.env.LLM_MANIFEST || 'defaultToolManifest.json';
 
         // Initialize context and tools using updateContext
         this.updateContextAndManifest(contextFile, toolManifestFile);
@@ -86,13 +144,10 @@ class ResponseService extends EventEmitter {
     /**
      * Executes a tool call based on function calling feature.
      * 
-     * @param {Object} tool - Tool call object
-     * @param {Object} tool.function - Function details
-     * @param {string} tool.function.name - Name of the tool to execute
-     * @param {string} tool.function.arguments - JSON string of arguments
-     * @returns {Promise<Object|null>} Tool execution result or null if execution fails
+     * @param {ToolCall} tool - Tool call object
+     * @returns {Promise<ToolResult|null>} Tool execution result or null if execution fails
      */
-    async executeToolCall(tool) {
+    async executeToolCall(tool: ToolCall): Promise<ToolResult | null> {
         logOut('ResponseService', `Executing tool call with tool being: ${JSON.stringify(tool, null, 4)} `);
 
         try {
@@ -101,11 +156,11 @@ class ResponseService extends EventEmitter {
             logOut('ResponseService', `Executing tool call: ${tool.function.name} with args: ${JSON.stringify(calledToolArgs, null, 4)}`);
 
             // Now run the loaded tool
-            let toolResponse = calledTool(calledToolArgs);
+            let toolResponse = await calledTool(calledToolArgs);
 
             return toolResponse;
         } catch (error) {
-            console.error(`ResponseService executeToolCall, Error executing tool ${tool.function.name}:`, error);
+            console.error(`ResponseService executeToolCall, Error executing tool ${tool.function.name}:`, error instanceof Error ? error.message : String(error));
             return null;
         }
     }
@@ -113,18 +168,22 @@ class ResponseService extends EventEmitter {
     /**
      * Retrieves the current conversation history.
      * 
-     * @returns {Array} Array of message objects
+     * @returns {Array<OpenAI.ChatCompletionMessageParam>} Array of message objects
      */
-    getMessages() {
+    getMessages(): OpenAI.ChatCompletionMessageParam[] {
         return this.promptMessagesArray;
     }
 
     /**
      * Clears conversation history except for the initial system message.
      */
-    clearMessages() {
-        const systemMessage = this.promptMessagesArray[0];
-        this.promptMessagesArray = [systemMessage];
+    clearMessages(): void {
+        if (this.promptMessagesArray.length > 0) {
+            const systemMessage = this.promptMessagesArray[0];
+            this.promptMessagesArray = [systemMessage];
+        } else {
+            this.promptMessagesArray = [];
+        }
     }
 
     /**
@@ -141,7 +200,7 @@ class ResponseService extends EventEmitter {
      * This enables more natural conversation flow by letting users
      * interrupt lengthy responses or redirect the conversation.
      */
-    interrupt() {
+    interrupt(): void {
         this.isInterrupted = true;
     }
 
@@ -156,7 +215,7 @@ class ResponseService extends EventEmitter {
      * 2. Each response generation starts with isInterrupted = false
      * 3. The system is ready to handle new potential interruptions
      */
-    resetInterrupt() {
+    resetInterrupt(): void {
         this.isInterrupted = false;
     }
 
@@ -167,9 +226,21 @@ class ResponseService extends EventEmitter {
      * @param {string} role - Message role ('system' or 'user')
      * @param {string} message - Message content to add to context
      */
-    async insertMessageIntoContext(role = 'system', message) {
+    async insertMessageIntoContext(role: 'system' | 'user' | 'assistant' | 'tool' = 'system', message: string): Promise<void> {
         logOut('ResponseService', `Inserting message into context: ${role}: ${message}`);
-        this.promptMessagesArray.push({ role, content: message });
+
+        if (role === 'tool') {
+            this.promptMessagesArray.push({
+                role,
+                content: message,
+                tool_call_id: 'unknown' // Required for tool messages
+            });
+        } else {
+            this.promptMessagesArray.push({
+                role,
+                content: message
+            });
+        }
     }
 
     /**
@@ -180,14 +251,22 @@ class ResponseService extends EventEmitter {
      * @param {string} toolManifestFile - Path to the new toolManifest.json file
      * @throws {Error} If file loading fails
      */
-    async updateContextAndManifest(contextFile, toolManifestFile) {
+    async updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void> {
         logOut('ResponseService', `Updating context with new files: ${contextFile}, ${toolManifestFile}`);
+
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
 
         try {
             // Load new context and tool manifest from provided file paths
-            const context = fs.readFileSync(path.join(__dirname, `../assets/${contextFile}`), 'utf8');
-            const toolManifestPath = path.join(__dirname, `../assets/${toolManifestFile}`);
-            const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8'));
+            const assetsDir = path.join(__dirname, '..', '..', 'assets');
+            logOut('ResponseService', `Loading context and tool manifest from: ${assetsDir}`);
+            const toolManifestPath = path.join(assetsDir, toolManifestFile);
+            logOut('ResponseService', `Loading tool manifest from: ${toolManifestPath}`);
+
+            const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
+            const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: OpenAI.ChatCompletionTool[] };
+
 
             // Reset conversation history and initialize with new system context
             this.promptMessagesArray = [{
@@ -203,17 +282,22 @@ class ResponseService extends EventEmitter {
             this.loadedTools = {};
 
             logOut('ResponseService', `Reloading tools...`);
-            this.toolDefinitions.forEach(async (tool) => {
+            for (const tool of this.toolDefinitions) {
                 let functionName = tool.function.name;
-                // Dynamic import for ES modules
-                const toolModule = await import(`../tools/${functionName}.js`);
-                this.loadedTools[functionName] = toolModule.default;
-                logOut('ResponseService', `Loaded function: ${functionName}`);
-            });
-            logOut('ResponseService', `Loaded ${this.toolDefinitions.length} tools`);
+                try {
+                    // Dynamic import for ES modules
+                    const toolsDir = path.join(__dirname, '..', 'tools');
+                    const toolModule = await import(path.join(toolsDir, `${functionName}.js`));
+                    this.loadedTools[functionName] = toolModule.default;
+                    logOut('ResponseService', `Loaded function: ${functionName}`);
+                } catch (error) {
+                    logError('ResponseService', `Error loading tool ${functionName}: ${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+            logOut('ResponseService', `Loaded ${Object.keys(this.loadedTools).length} tools`);
 
         } catch (error) {
-            logError('ResponseService', `Error updating context. Please ensure the files are in the /assets directory:`, error);
+            logError('ResponseService', `Error updating context. Please ensure the files are in the /assets directory: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -222,7 +306,7 @@ class ResponseService extends EventEmitter {
      * Performs cleanup of service resources.
      * Removes all event listeners to prevent memory leaks.
      */
-    cleanup() {
+    cleanup(): void {
         // Remove all event listeners
         this.removeAllListeners();
     }
@@ -265,20 +349,20 @@ class ResponseService extends EventEmitter {
      * @emits responseService.toolResult
      * @emits responseService.error
      */
-    async generateResponse(role = 'user', prompt) {
+    async generateResponse(role: 'user' | 'system' = 'user', prompt: string): Promise<void> {
         let fullResponse = '';
-        let toolCallCollector = null;
+        let toolCallCollector: ToolCall | null = null;
         this.isInterrupted = false;
         logOut('ResponseService', `Generating response for ${role}: ${prompt}`);
 
         try {
             // Add the prompt message to history
-            this.promptMessagesArray.push({ role: role, content: prompt });
+            this.promptMessagesArray.push({ role, content: prompt });
 
             const stream = await this.openai.chat.completions.create({
                 model: this.model,
                 messages: this.promptMessagesArray,
-                tools: this.toolManifest.tools,
+                tools: this.toolDefinitions,
                 stream: true
             });
 
@@ -298,11 +382,11 @@ class ResponseService extends EventEmitter {
                         type: "text",
                         token: content,
                         last: false
-                    });
+                    } as ContentResponse);
                 }
 
                 if (toolCalls && toolCalls.length > 0) {
-                    const toolCall = toolCalls[0];
+                    const toolCall = toolCalls[0] as OpenAIToolCall;
 
                     // Initialize collector if this is the first tool call chunk
                     if (!toolCallCollector) {
@@ -334,7 +418,7 @@ class ResponseService extends EventEmitter {
 
                 if (chunk.choices[0]?.finish_reason === 'tool_calls' && toolCallCollector) {
 
-                    const toolCallObj = {
+                    const toolCallObj: ToolCall = {
                         id: toolCallCollector.id,
                         type: "function",
                         function: {
@@ -343,7 +427,7 @@ class ResponseService extends EventEmitter {
                         }
                     };
 
-                    let toolResult = null;
+                    let toolResult: ToolResult | null = null;
                     try {
                         let calledTool = this.loadedTools[toolCallObj.function.name];
                         let calledToolArgs = JSON.parse(toolCallObj.function.arguments);
@@ -355,7 +439,14 @@ class ResponseService extends EventEmitter {
                         this.promptMessagesArray.push({
                             role: "assistant",
                             content: fullResponse,
-                            tool_calls: [toolCallObj]
+                            tool_calls: [{
+                                id: toolCallObj.id,
+                                type: "function",
+                                function: {
+                                    name: toolCallObj.function.name,
+                                    arguments: toolCallObj.function.arguments
+                                }
+                            }]
                         });
 
                         /**
@@ -371,34 +462,36 @@ class ResponseService extends EventEmitter {
                          * } 
                          * 
                          */
-                        switch (toolResult.toolType) {
-                            case "tool":
-                                // Add the tool result to the conversation history
-                                logOut('ResponseService', `Tool selected data: ${JSON.stringify(toolResult)}`);
-                                this.promptMessagesArray.push({
-                                    role: "tool",
-                                    content: JSON.stringify(toolResult.toolData),
-                                    tool_call_id: toolCallObj.id
-                                });
-                                break;
-                            case "crelay":
-                                // Emit the tool result so CR can use it
-                                logOut('ResponseService', `Tool selected: crelay`);
-                                this.emit('responseService.toolResult', toolResult.toolData);
-                                break;
-                            case "error":
-                                // Add the error to the conversation history
-                                logOut('ResponseService', `Tool selected: error`);
-                                this.promptMessagesArray.push({
-                                    role: "system",
-                                    content: toolResult.toolData
-                                });
-                                break;
-                            default:
-                                logOut('ResponseService', `No tool type selected. Using default processor`);
+                        if (toolResult) {
+                            switch (toolResult.toolType) {
+                                case "tool":
+                                    // Add the tool result to the conversation history
+                                    logOut('ResponseService', `Tool selected data: ${JSON.stringify(toolResult)}`);
+                                    this.promptMessagesArray.push({
+                                        role: "tool",
+                                        content: JSON.stringify(toolResult.toolData),
+                                        tool_call_id: toolCallObj.id
+                                    });
+                                    break;
+                                case "crelay":
+                                    // Emit the tool result so CR can use it
+                                    logOut('ResponseService', `Tool selected: crelay`);
+                                    this.emit('responseService.toolResult', toolResult);
+                                    break;
+                                case "error":
+                                    // Add the error to the conversation history
+                                    logOut('ResponseService', `Tool selected: error`);
+                                    this.promptMessagesArray.push({
+                                        role: "system",
+                                        content: toolResult.toolData
+                                    });
+                                    break;
+                                default:
+                                    logOut('ResponseService', `No tool type selected. Using default processor`);
+                            }
                         }
                     } catch (error) {
-                        logError('ResponseService', `GenerateResponse, Error executing tool ${toolCallObj.function.name}:`, error);
+                        logError('ResponseService', `GenerateResponse, Error executing tool ${toolCallObj.function.name}: ${error instanceof Error ? error.message : String(error)}`);
                     }
 
                     // Continue the conversation with tool results
@@ -419,7 +512,7 @@ class ResponseService extends EventEmitter {
                                 type: "text",
                                 token: content,
                                 last: false
-                            });
+                            } as ContentResponse);
                         }
                     }
                 }
@@ -438,7 +531,7 @@ class ResponseService extends EventEmitter {
                 type: "text",
                 token: '',
                 last: true
-            });
+            } as ContentResponse);
 
         } catch (error) {
             this.emit('responseService.error', error);

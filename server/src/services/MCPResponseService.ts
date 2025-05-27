@@ -29,7 +29,7 @@
  * names defined in the toolManifest.json file. Each tool's filename in the /tools directory
  * must exactly match its corresponding name in the manifest. For example, if the manifest
  * defines a tool with name "send-sms", the service will attempt to load it from
- * "/tools/send-sms.js". This naming convention is critical for the dynamic loading system
+ * "/tools/send-sms.ts". This naming convention is critical for the dynamic loading system
  * to work correctly.
  * 
  * @class
@@ -58,22 +58,69 @@ import { MCPClient } from '../mcp/McpClient.js';
 import { logOut, logError } from '../utils/logger.js';
 
 import OpenAI from 'openai';
-const { OPENAI_API_KEY } = process.env;
-const { OPENAI_MODEL } = process.env;
-
 
 dotenv.config();
+
+const { OPENAI_API_KEY, OPENAI_MODEL } = process.env;
 
 // Get the directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-class MCPResponseService extends EventEmitter {
+
+type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
+
+interface Message {
+    role: MessageRole;
+    content: string;
+    tool_calls?: any[];
+    tool_call_id?: string;
+}
+
+interface ToolFunction {
+    name: string;
+    arguments: string;
+}
+
+interface ToolCall {
+    id: string;
+    type: string;
+    function: ToolFunction;
+}
+
+interface ToolResult {
+    toolType: string;
+    toolData: any;
+}
+
+interface ToolDefinition {
+    function: {
+        name: string;
+        arguments: string;
+    };
+    [key: string]: any;
+}
+
+interface ToolManifest {
+    tools: ToolDefinition[];
+}
+
+type LoadedTools = {
+    [key: string]: (args: any) => Promise<any> | any;
+};
+
+export class MCPResponseService extends EventEmitter {
+    public openai: OpenAI;
+    public model: string | undefined;
+    public promptMessagesArray: Message[];
+    public toolManifest: ToolManifest | undefined;
+    public isInterrupted: boolean;
+    public loadedTools: LoadedTools = {};
+    public toolDefinitions: ToolDefinition[] | undefined;
+
     /**
      * Creates a new ResponseService instance.
      * Initializes client, loads tools from manifest, and sets up initial state.
      * 
-     * @param {string} contextFile - Path to the context.md file
-     * @param {string} toolManifestFile - Path to the toolManifest.json file
      * @throws {Error} If tool loading fails
      */
     constructor() {
@@ -82,8 +129,8 @@ class MCPResponseService extends EventEmitter {
         this.isInterrupted = false;
 
         // Which Context, Tool Manifest to use for this call (or the default)
-        const contextFile = process.env.LLM_CONTEXT || 'defaultContext.md'
-        const toolManifestFile = process.env.LLM_MANIFEST || 'defaultToolManifest.json'
+        const contextFile = process.env.LLM_CONTEXT || 'defaultContext.md';
+        const toolManifestFile = process.env.LLM_MANIFEST || 'defaultToolManifest.json';
 
         // Initialize context and tools using updateContext
         this.updateContextAndManifest(contextFile, toolManifestFile);
@@ -96,22 +143,19 @@ class MCPResponseService extends EventEmitter {
     /**
      * Executes a tool call based on function calling feature.
      * 
-     * @param {Object} tool - Tool call object
-     * @param {Object} tool.function - Function details
-     * @param {string} tool.function.name - Name of the tool to execute
-     * @param {string} tool.function.arguments - JSON string of arguments
-     * @returns {Promise<Object|null>} Tool execution result or null if execution fails
+     * @param tool - Tool call object
+     * @returns Tool execution result or null if execution fails
      */
-    async executeToolCall(tool) {
+    public async executeToolCall(tool: ToolCall): Promise<any | null> {
         logOut('ResponseService', `Executing tool call with tool being: ${JSON.stringify(tool, null, 4)} `);
 
         try {
-            let calledTool = this.loadedTools[tool.function.name];
-            let calledToolArgs = JSON.parse(tool.function.arguments);
+            const calledTool = this.loadedTools[tool.function.name];
+            const calledToolArgs = JSON.parse(tool.function.arguments);
             logOut('ResponseService', `Executing tool call: ${tool.function.name} with args: ${JSON.stringify(calledToolArgs, null, 4)}`);
 
             // Now run the loaded tool
-            let toolResponse = calledTool(calledToolArgs);
+            const toolResponse = await calledTool(calledToolArgs);
 
             return toolResponse;
         } catch (error) {
@@ -123,16 +167,16 @@ class MCPResponseService extends EventEmitter {
     /**
      * Retrieves the current conversation history.
      * 
-     * @returns {Array} Array of message objects
+     * @returns Array of message objects
      */
-    getMessages() {
+    public getMessages(): Message[] {
         return this.promptMessagesArray;
     }
 
     /**
      * Clears conversation history except for the initial system message.
      */
-    clearMessages() {
+    public clearMessages(): void {
         const systemMessage = this.promptMessagesArray[0];
         this.promptMessagesArray = [systemMessage];
     }
@@ -142,16 +186,8 @@ class MCPResponseService extends EventEmitter {
      * Sets isInterrupted flag to true to stop streaming immediately.
      * This method is called when a user interrupts the AI during a response,
      * allowing the system to stop the current response and process the new input.
-     * 
-     * The interrupt mechanism works by:
-     * 1. Setting the isInterrupted flag to true
-     * 2. Breaking out of the streaming loop in generateResponse
-     * 3. Allowing the system to process the new user input
-     * 
-     * This enables more natural conversation flow by letting users
-     * interrupt lengthy responses or redirect the conversation.
      */
-    interrupt() {
+    public interrupt(): void {
         this.isInterrupted = true;
     }
 
@@ -160,13 +196,8 @@ class MCPResponseService extends EventEmitter {
      * Allows new responses to be generated after an interruption.
      * This method is called automatically at the beginning of generateResponse
      * to ensure each new response starts with a clean interrupt state.
-     * 
-     * The reset mechanism ensures that:
-     * 1. Previous interruptions don't affect new responses
-     * 2. Each response generation starts with isInterrupted = false
-     * 3. The system is ready to handle new potential interruptions
      */
-    resetInterrupt() {
+    public resetInterrupt(): void {
         this.isInterrupted = false;
     }
 
@@ -174,90 +205,76 @@ class MCPResponseService extends EventEmitter {
      * Inserts a message into conversation context without generating a response.
      * Used for live agent handling when an agent interjects in the conversation.
      * 
-     * @param {string} role - Message role ('system' or 'user')
-     * @param {string} message - Message content to add to context
+     * @param role - Message role ('system' or 'user')
+     * @param message - Message content to add to context
      */
-    async insertMessageIntoContext(role = 'system', message) {
+    public async insertMessageIntoContext(role: MessageRole = 'system', message: string): Promise<void> {
         logOut('ResponseService', `Inserting message into context: ${role}: ${message}`);
         this.promptMessagesArray.push({ role, content: message });
     }
 
     /**
      * Updates the context and tool manifest files used by the service dynamically. The name passed in will be used to load the context and tool manifest files.
-     * The convention is that the context and manifest filles will be stored in the assets directory.
+     * The convention is that the context and manifest files will be stored in the assets directory.
      * 
-     * @param {string} contextFile - Path to the new context.md file
-     * @param {string} toolManifestFile - Path to the new toolManifest.json file
+     * @param contextFile - Path to the new context.md file
+     * @param toolManifestFile - Path to the new toolManifest.json file
      * @throws {Error} If file loading fails
      */
-    async updateContextAndManifest(contextFile, toolManifestFile) {
+    public async updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void> {
         logOut('ResponseService', `Updating context with new files: ${contextFile}, ${toolManifestFile}`);
 
         try {
-            // Load new context and tool manifest from provided file paths
-            // const context = fs.readFileSync(path.join(__dirname, `../assets/${contextFile}`), 'utf8');
-            // const toolManifest = require(path.join(__dirname, `../assets/${toolManifestFile}`));
-
-            /*********************************************
-             * MCP Server loading
-             * 
-             * We are using the MCP server to load the context and tools dynamically. The intention is that the customer will have a 
-             * MCP server to outline thier required context for Conversation Relay and the tools that are available to the system..
-             */
-
-            /*****************************************
-             *          MCP Tools
-             ****************************************/
+            // MCP Server loading
             const mcpClient = new MCPClient();
             try {
                 logOut('ResponseService', `Connecting to MCP server...`);
                 await mcpClient.connectToMcpServer();
-                // await mcpClient.listTools();
-                // Get the tool executor
                 const mcpToolExecutor = mcpClient.getToolExecutor();
                 if (!mcpToolExecutor) {
                     logError('ResponseService', `Tool executor not initialized. Please ensure MCP server is connected and tools are loaded.`);
                     return;
                 }
-                // Convert MCP tools to OpenAI tools
                 const tools = mcpClient.convertToOpenAiTools();
                 if (!tools) {
                     logError('ResponseService', `No tools available or failed to convert. Please ensure MCP server is connected and tools are loaded.`);
                     return;
                 }
 
-                const toolManifest = {
+                const toolManifest: ToolManifest = {
                     tools: tools
                 };
                 logOut('ResponseService', `Loaded ${toolManifest.tools.length} tools from MCP server`);
+
+                // Reset conversation history and initialize with new system context
+                // For now, context is not loaded from file, but could be added here
+                this.promptMessagesArray = [{
+                    role: 'system',
+                    content: '' // context could be loaded from file if needed
+                }];
+
+                // Update tool definitions and reload tools
+                this.toolManifest = toolManifest;
+                this.toolDefinitions = toolManifest.tools;
+                this.loadedTools = {};
+
+                logOut('ResponseService', `Reloading tools...`);
+                for (const tool of this.toolDefinitions) {
+                    const functionName = tool.function.name;
+                    // Dynamic import for ES modules
+                    try {
+                        const toolModule = await import(`../tools/${functionName}.js`);
+                        this.loadedTools[functionName] = toolModule.default;
+                        logOut('ResponseService', `Loaded function: ${functionName}`);
+                    } catch (err) {
+                        logError('ResponseService', `Failed to load tool module: ${functionName}`, err);
+                    }
+                }
+                logOut('ResponseService', `Loaded ${this.toolDefinitions.length} tools`);
             } catch (error) {
                 logError('ResponseService', `Error connecting to MCP server:`, error);
                 return;
             }
-
-            // Reset conversation history and initialize with new system context
-            this.promptMessagesArray = [{
-                role: 'system',
-                content: context
-            }];
-
-            // Update tool definitions and reload tools
-            this.toolManifest = toolManifest;
-
-            // Update tool definitions and reload tools
-            this.toolDefinitions = toolManifest.tools;
-            this.loadedTools = {};
-
-            logOut('ResponseService', `Reloading tools...`);
-            this.toolDefinitions.forEach(async (tool) => {
-                let functionName = tool.function.name;
-                // Dynamic import for ES modules
-                const toolModule = await import(`../tools/${functionName}.js`);
-                this.loadedTools[functionName] = toolModule.default;
-                logOut('ResponseService', `Loaded function: ${functionName}`);
-            });
-            logOut('ResponseService', `Loaded ${this.toolDefinitions.length} tools`);
-
         } catch (error) {
             logError('ResponseService', `Error updating context. Please ensure the files are in the /assets directory:`, error);
             throw error;
@@ -268,8 +285,7 @@ class MCPResponseService extends EventEmitter {
      * Performs cleanup of service resources.
      * Removes all event listeners to prevent memory leaks.
      */
-    cleanup() {
-        // Remove all event listeners
+    public cleanup(): void {
         this.removeAllListeners();
     }
 
@@ -277,43 +293,16 @@ class MCPResponseService extends EventEmitter {
      * Generates a streaming response using the LLM API.
      * Handles tool calls, manages conversation history, and emits response chunks.
      * 
-     *  == Streaming and Tool Calls ==
-     * The service handles streaming responses that may include both content and tool calls:
-     *      1. Content chunks are emitted directly via 'responseService.content' events
-     *      2. Tool call chunks are accumulated until complete, as they may span multiple chunks
-     *      3. When a complete tool call is received (finish_reason='tool_calls'):
-     *          - The tool is executed with the assembled arguments
-     *          - The result is added to conversation history
-     *          - A new stream is created to continue the conversation with the tool result
-     * This chunked approach ensures reliable tool execution even with complex arguments while maintaining a responsive streaming experience.
-     * 
-     * == Tool Execution Flow ==
-     * When the LLM suggests a tool call, the executeToolCall method processes it by:
-     *      1. Retrieving the tool function from the loadedTools map using the tool name
-     *      2. Parsing the JSON string arguments into an object
-     *      3. Executing the tool with the parsed arguments
-     *      4. Returning the tool's response for inclusion in the conversation
-     * 
-     * == Interrupt Handling ==
-     * The method supports graceful interruption during response generation:
-     *      1. The isInterrupted flag is reset to false at the start of each response
-     *      2. During streaming, each chunk checks if isInterrupted has been set to true
-     *      3. If an interruption is detected, the streaming loop breaks immediately
-     *      4. This allows the system to quickly respond to user interruptions
-     *      5. The same interrupt check is applied to both initial and follow-up streams
-     * This approach ensures responsive conversation flow by allowing users to interrupt
-     * lengthy responses without waiting for completion.
-     * 
-     * @param {string} role - Message role ('user' or 'system')
-     * @param {string} prompt - Input message content
+     * @param role - Message role ('user' or 'system')
+     * @param prompt - Input message content
      * @throws {Error} If response generation fails
      * @emits responseService.content
      * @emits responseService.toolResult
      * @emits responseService.error
      */
-    async generateResponse(role = 'user', prompt) {
+    public async generateResponse(role: MessageRole = 'user', prompt: string): Promise<void> {
         let fullResponse = '';
-        let toolCallCollector = null;
+        let toolCallCollector: ToolCall | null = null;
         this.isInterrupted = false;
         logOut('ResponseService', `Generating response for ${role}: ${prompt}`);
 
@@ -322,15 +311,15 @@ class MCPResponseService extends EventEmitter {
             this.promptMessagesArray.push({ role: role, content: prompt });
 
             const stream = await this.openai.chat.completions.create({
-                model: this.model,
+                model: this.model!,
                 messages: this.promptMessagesArray,
-                tools: this.toolManifest.tools,
+                tools: this.toolManifest?.tools,
                 stream: true
             });
 
             logOut('ResponseService', `Stream created`);
 
-            for await (const chunk of stream) {
+            for await (const chunk of stream as any) {
                 if (this.isInterrupted) {
                     break;
                 }
@@ -380,7 +369,7 @@ class MCPResponseService extends EventEmitter {
 
                 if (chunk.choices[0]?.finish_reason === 'tool_calls' && toolCallCollector) {
 
-                    const toolCallObj = {
+                    const toolCallObj: ToolCall = {
                         id: toolCallCollector.id,
                         type: "function",
                         function: {
@@ -389,10 +378,10 @@ class MCPResponseService extends EventEmitter {
                         }
                     };
 
-                    let toolResult = null;
+                    let toolResult: ToolResult | null = null;
                     try {
-                        let calledTool = this.loadedTools[toolCallObj.function.name];
-                        let calledToolArgs = JSON.parse(toolCallObj.function.arguments);
+                        const calledTool = this.loadedTools[toolCallObj.function.name];
+                        const calledToolArgs = JSON.parse(toolCallObj.function.arguments);
 
                         toolResult = await calledTool(calledToolArgs);
                         logOut('ResponseService', `Conversational tool call result: ${JSON.stringify(toolResult, null, 4)}`);
@@ -404,44 +393,33 @@ class MCPResponseService extends EventEmitter {
                             tool_calls: [toolCallObj]
                         });
 
-                        /**
-                         * There are different types of responses that can come back from the tools to indicate what needs to be done:
-                         * 
-                         * - tool: normal tool call that returns a result that is then consumed by the LLM to produce conversational content.
-                         * - error: error message also consumed by the LLM to produce conversational content.
-                         * - crelay: Conversation Relay specific response format that is not sent back as conversational content
-                         * - llm: LLM Controller specific response format that is not sent back as conversational content, but used to change the LLM.
-                         * {
-                         *       tool: "tool-type",
-                         *       response: "response text",
-                         * } 
-                         * 
-                         */
-                        switch (toolResult.toolType) {
-                            case "tool":
-                                // Add the tool result to the conversation history
-                                logOut('ResponseService', `Tool selected data: ${JSON.stringify(toolResult)}`);
-                                this.promptMessagesArray.push({
-                                    role: "tool",
-                                    content: JSON.stringify(toolResult.toolData),
-                                    tool_call_id: toolCallObj.id
-                                });
-                                break;
-                            case "crelay":
-                                // Emit the tool result so CR can use it
-                                logOut('ResponseService', `Tool selected: crelay`);
-                                this.emit('responseService.toolResult', toolResult.toolData);
-                                break;
-                            case "error":
-                                // Add the error to the conversation history
-                                logOut('ResponseService', `Tool selected: error`);
-                                this.promptMessagesArray.push({
-                                    role: "system",
-                                    content: toolResult.toolData
-                                });
-                                break;
-                            default:
-                                logOut('ResponseService', `No tool type selected. Using default processor`);
+                        if (toolResult) {
+                            switch (toolResult.toolType) {
+                                case "tool":
+                                    // Add the tool result to the conversation history
+                                    logOut('ResponseService', `Tool selected data: ${JSON.stringify(toolResult)}`);
+                                    this.promptMessagesArray.push({
+                                        role: "tool",
+                                        content: JSON.stringify(toolResult.toolData),
+                                        tool_call_id: toolCallObj.id
+                                    });
+                                    break;
+                                case "crelay":
+                                    // Emit the tool result so CR can use it
+                                    logOut('ResponseService', `Tool selected: crelay`);
+                                    this.emit('responseService.toolResult', toolResult.toolData);
+                                    break;
+                                case "error":
+                                    // Add the error to the conversation history
+                                    logOut('ResponseService', `Tool selected: error`);
+                                    this.promptMessagesArray.push({
+                                        role: "system",
+                                        content: toolResult.toolData
+                                    });
+                                    break;
+                                default:
+                                    logOut('ResponseService', `No tool type selected. Using default processor`);
+                            }
                         }
                     } catch (error) {
                         logError('ResponseService', `GenerateResponse, Error executing tool ${toolCallObj.function.name}:`, error);
@@ -449,12 +427,12 @@ class MCPResponseService extends EventEmitter {
 
                     // Continue the conversation with tool results
                     const followUpStream = await this.openai.chat.completions.create({
-                        model: this.model,
+                        model: this.model!,
                         messages: this.promptMessagesArray,
                         stream: true
                     });
 
-                    for await (const chunk of followUpStream) {
+                    for await (const chunk of followUpStream as any) {
                         if (this.isInterrupted) {
                             break;
                         }
@@ -492,5 +470,3 @@ class MCPResponseService extends EventEmitter {
         }
     }
 }
-
-export { MCPResponseService };

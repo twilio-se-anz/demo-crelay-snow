@@ -54,18 +54,47 @@
 
 import { logOut, logError } from '../utils/logger.js';
 
-const {
-    SILENCE_SECONDS_THRESHOLD = 20,
-    SILENCE_RETRY_THRESHOLD = 3
-} = process.env;
+/**
+ * Interface for silence breaker text message
+ */
+interface SilenceBreakerTextMessage {
+    type: 'text';
+    token: string;
+    last: boolean;
+}
+
+/**
+ * Interface for end call message
+ */
+interface EndCallMessage {
+    type: 'end';
+    handoffData: string;
+}
+
+/**
+ * Union type for all message types that can be sent by the silence handler
+ */
+type SilenceHandlerMessage = SilenceBreakerTextMessage | EndCallMessage;
+
+/**
+ * Type for the message callback function
+ */
+type MessageCallback = (message: SilenceHandlerMessage) => void;
 
 class SilenceHandler {
+    private silenceSecondsThreshold: number;
+    private silenceRetryThreshold: number;
+    private lastMessageTime: number | null;
+    private silenceTimer: NodeJS.Timeout | null;
+    private silenceRetryCount: number;
+    private messageCallback: MessageCallback | null;
+
     /**
      * Creates a new SilenceHandler instance.
      */
     constructor() {
-        this.silenceSecondsThreshold = SILENCE_SECONDS_THRESHOLD;
-        this.silenceRetryThreshold = SILENCE_RETRY_THRESHOLD;
+        this.silenceSecondsThreshold = Number(process.env.SILENCE_SECONDS_THRESHOLD) || 20;
+        this.silenceRetryThreshold = Number(process.env.SILENCE_RETRY_THRESHOLD) || 3;
         this.lastMessageTime = null;
         this.silenceTimer = null;
         this.silenceRetryCount = 0;
@@ -75,9 +104,9 @@ class SilenceHandler {
     /**
      * Creates the message to end the call due to silence.
      * 
-     * @returns {Object} Message object with end type and handoff data
+     * @returns {EndCallMessage} Message object with end type and handoff data
      */
-    createEndCallMessage() {
+    createEndCallMessage(): EndCallMessage {
         return {
             type: "end",
             handoffData: JSON.stringify({
@@ -90,9 +119,9 @@ class SilenceHandler {
     /**
      * Creates a silence breaker reminder message.
      * 
-     * @returns {Object} Message object with text type and reminder content
+     * @returns {SilenceBreakerTextMessage} Message object with text type and reminder content
      */
-    createSilenceBreakerMessage() {
+    createSilenceBreakerMessage(): SilenceBreakerTextMessage {
         // Select a different silence breaker message depending how many times you have asked
         if (this.silenceRetryCount === 1) {
             return {
@@ -100,7 +129,7 @@ class SilenceHandler {
                 token: "Still there?",
                 last: true
             };
-        } else if (this.silenceRetryCount === 2) {
+        } else {
             return {
                 type: 'text',
                 token: "Just checking you are still there?",
@@ -112,13 +141,15 @@ class SilenceHandler {
     /**
      * Starts monitoring for silence.
      * 
-     * @param {Function} onMessage - Callback function to handle messages
+     * @param {MessageCallback} onMessage - Callback function to handle messages
      */
-    startMonitoring(onMessage) {
+    startMonitoring(onMessage: MessageCallback): void {
         this.lastMessageTime = Date.now();
         this.messageCallback = onMessage;
 
         this.silenceTimer = setInterval(() => {
+            if (this.lastMessageTime === null) return;
+
             const silenceTime = (Date.now() - this.lastMessageTime) / 1000; // Convert to seconds
             if (silenceTime >= this.silenceSecondsThreshold) {
                 this.silenceRetryCount++;
@@ -126,7 +157,9 @@ class SilenceHandler {
 
                 if (this.silenceRetryCount >= this.silenceRetryThreshold) {
                     // End the call if we've exceeded the retry threshold
-                    clearInterval(this.silenceTimer);
+                    if (this.silenceTimer) {
+                        clearInterval(this.silenceTimer);
+                    }
                     // logOut('Silence', 'Ending call due to exceeding silence retry threshold');
                     if (this.messageCallback) {
                         this.messageCallback(this.createEndCallMessage());
@@ -146,7 +179,7 @@ class SilenceHandler {
     /**
      * Resets the silence timer when a valid message is received.
      */
-    resetTimer() {
+    resetTimer(): void {
         if (this.lastMessageTime !== null) {
             this.lastMessageTime = Date.now();
             // Reset the retry count when we get a valid message
@@ -160,10 +193,11 @@ class SilenceHandler {
     /**
      * Cleans up resources by clearing the silence timer.
      */
-    cleanup() {
+    cleanup(): void {
         if (this.silenceTimer) {
             logOut('Silence', 'Cleaning up silence monitor');
             clearInterval(this.silenceTimer);
+            this.silenceTimer = null;
             this.messageCallback = null;
         }
     }

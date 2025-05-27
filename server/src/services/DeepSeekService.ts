@@ -10,9 +10,6 @@ import OpenAI from 'openai';
 import { ResponseService } from './ResponseService.js';
 import { logOut } from '../utils/logger.js';
 
-const { DEEPSEEK_API_KEY } = process.env;
-const { DEEPSEEK_MODEL } = process.env;
-
 class DeepSeekService extends ResponseService {
     /**
      * Creates a new DeepSeekService instance.
@@ -24,9 +21,9 @@ class DeepSeekService extends ResponseService {
         super();
         this.openai = new OpenAI({
             baseURL: 'https://api.deepseek.com',
-            apiKey: DEEPSEEK_API_KEY
+            apiKey: process.env.DEEPSEEK_API_KEY || ''
         });
-        this.model = DEEPSEEK_MODEL;
+        this.model = process.env.DEEPSEEK_MODEL || '';
         logOut('DeepSeekService', 'Initialized');
     }
 }

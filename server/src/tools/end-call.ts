@@ -1,14 +1,33 @@
 import { logOut, logError } from '../utils/logger.js';
 
 /**
+ * Interface for the function arguments
+ */
+interface EndCallFunctionArguments {
+    summary: string;
+    [key: string]: any;
+}
+
+/**
+ * Interface for the response object
+ */
+interface EndCallResponse {
+    toolType: string;
+    toolData: {
+        type: string;
+        handoffData: string;
+    };
+}
+
+/**
  * This is a CR specific tool type. It CR specific messages sent back via the Websocket.
  * 
- * @param {*} functionArguments 
- * @returns 
+ * @param functionArguments - The arguments for the end call function
+ * @returns The response object for ending the call
  */
-export default function (functionArguments) {
+export default function (functionArguments: EndCallFunctionArguments): EndCallResponse {
     logOut('EndCall', `End call function called with arguments: ${JSON.stringify(functionArguments)}`);
-    const response = {
+    const response: EndCallResponse = {
         toolType: "crelay",
         toolData: {
             type: "end",

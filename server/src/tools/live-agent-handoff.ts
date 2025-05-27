@@ -1,14 +1,33 @@
 import { logOut, logError } from '../utils/logger.js';
 
 /**
+ * Interface for the function arguments
+ */
+interface LiveAgentHandoffFunctionArguments {
+    summary: string;
+    [key: string]: any;
+}
+
+/**
+ * Interface for the response object
+ */
+interface LiveAgentHandoffResponse {
+    toolType: string;
+    toolData: {
+        type: string;
+        handoffData: string;
+    };
+}
+
+/**
  * This is a CR specific tool type. It CR specific messages sent back via the Websocket.
  * 
- * @param {*} functionArguments 
- * @returns 
+ * @param functionArguments - The arguments for the live agent handoff function
+ * @returns The response object for handing off to a live agent
  */
-export default function (functionArguments) {
+export default function (functionArguments: LiveAgentHandoffFunctionArguments): LiveAgentHandoffResponse {
     logOut('LiveAgentHandoff', `LiveAgentHandoff function called with arguments: ${JSON.stringify(functionArguments)}`);
-    const response = {
+    const response: LiveAgentHandoffResponse = {
         toolType: "crelay",
         toolData: {
             type: "end",

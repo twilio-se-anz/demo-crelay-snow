@@ -3,6 +3,14 @@ import { EventEmitter } from 'events';
 import { logOut, logError } from '../utils/logger.js';
 
 /**
+ * Interface for status callback object
+ */
+interface StatusCallback {
+    CallSid: string;
+    [key: string]: any;
+}
+
+/**
  * Service class for handling Twilio-related operations including making calls, sending SMS and generating TwiML for the Conversation Relay service.
  * 
  * @class
@@ -12,12 +20,17 @@ import { logOut, logError } from '../utils/logger.js';
  * @property {twilio.Twilio} twilioClient - Initialized Twilio client instance
  */
 class TwilioService extends EventEmitter {
+    private accountSid: string;
+    private authToken: string;
+    private fromNumber: string;
+    private twilioClient: twilio.Twilio;
+
     constructor() {
         super();
-        this.accountSid = process.env.ACCOUNT_SID;
-        this.authToken = process.env.AUTH_TOKEN;
-        this.fromNumber = process.env.FROM_NUMBER;
-        this.twilioClient = twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
+        this.accountSid = process.env.ACCOUNT_SID || '';
+        this.authToken = process.env.AUTH_TOKEN || '';
+        this.fromNumber = process.env.FROM_NUMBER || '';
+        this.twilioClient = twilio(process.env.ACCOUNT_SID || '', process.env.AUTH_TOKEN || '');
         // this.twilioClient = twilio(process.env.API_KEY, process.env.API_SECRET, { process.env.ACCOUNT_SID });    // Some issue here with the API key and secret
     }
 
@@ -28,17 +41,21 @@ class TwilioService extends EventEmitter {
      * @param {string} toNumber - The destination phone number in E.164 format
      * @param {string} callReference - Unique reference ID for the customer
      * @param {string} serverBaseUrl - Base URL for the Conversation Relay WebSocket server (without wss:// prefix)
-     * @returns {Promise<string>} The Twilio call SID if successful
+     * @returns {Promise<any>} The Twilio call object if successful
      * @throws {Error} If the call cannot be initiated or other Twilio API errors occur
      */
-    async makeOutboundCall(serverBaseUrl, toNumber, callReference = "") {
+    async makeOutboundCall(serverBaseUrl: string, toNumber: string, callReference: string = ""): Promise<any> {
         try {
             const conversationRelay = this.connectConversationRelay(serverBaseUrl, callReference);
+
+            if (!conversationRelay) {
+                throw new Error('Failed to generate TwiML for conversation relay');
+            }
 
             const call = await this.twilioClient.calls.create({
                 to: toNumber,
                 from: this.fromNumber,
-                twiml: conversationRelay,
+                twiml: conversationRelay.toString(),
                 // record: true,
             });
 
@@ -46,7 +63,7 @@ class TwilioService extends EventEmitter {
             return call;
 
         } catch (error) {
-            logError('TwilioService', `Make Outbound call error: ${error}`);
+            logError('TwilioService', `Make Outbound call error: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -58,7 +75,7 @@ class TwilioService extends EventEmitter {
      * @param {string} message - The message content to send
      * @returns {Promise<string|null>} The Twilio message SID if successful, null if sending fails
      */
-    async sendSMS(to, message) {
+    async sendSMS(to: string, message: string): Promise<string | null> {
         try {
             logOut('TwilioService', `Sending SMS to: ${to} with message: ${message}`);
 
@@ -69,7 +86,7 @@ class TwilioService extends EventEmitter {
             });
             return response.sid;
         } catch (error) {
-            logError('TwilioService', `Error sending SMS: ${error}`);
+            logError('TwilioService', `Error sending SMS: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
     }
@@ -83,7 +100,7 @@ class TwilioService extends EventEmitter {
      * @param {string} serverBaseUrl - Base URL for the Conversation Relay WebSocket server (without wss:// prefix)
      * @returns {twilio.twiml.VoiceResponse|null} The TwiML response object if successful, null if generation fails
      */
-    connectConversationRelay(serverBaseUrl, callReference = "") {
+    connectConversationRelay(serverBaseUrl: string, callReference: string = ""): twilio.twiml.VoiceResponse | null {
         try {
             logOut('TwilioService', `Generating TwiML for call with callReference: ${callReference}`);
 
@@ -95,15 +112,11 @@ class TwilioService extends EventEmitter {
                 welcomeGreeting: "Hi! How can I help you today?",
                 transcriptionProvider: "Deepgram",
                 speechModel: "nova-3-general",
-                interruptible: "true",
-                // Google Journey Voices - Available today
-                // voice: "en-AU-Journey-D",
-                // 11Labs voices (ETA TBD)
+                interruptible: "any",
                 ttsProvider: "Elevenlabs",
                 voice: "Charlie-flash_v2_5",
-                dtmfDetection: "true",
-                interruptible: "any",      // DTMF & Speech interruptible
-            });
+                dtmfDetection: true, // DTMF & Speech interruptible
+            } as any);
 
             conversationRelay.parameter(
                 {
@@ -116,7 +129,7 @@ class TwilioService extends EventEmitter {
             return response;
 
         } catch (error) {
-            logError('TwilioService', `Error generating call TwiML: ${error}`);
+            logError('TwilioService', `Error generating call TwiML: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
     }
@@ -125,13 +138,20 @@ class TwilioService extends EventEmitter {
      * Evaluate the status callback received. This will be used in the LLM to determine the next steps.
      * If there is nothing to be done, just null the response.
      * 
+     * @param statusCallback - The status callback object from Twilio
+     * @returns The evaluated status callback object or null
      */
-    async evaluateStatusCallback(statusCallback) {
-        logOut('TwilioService', `Evaluating status callback: ${JSON.stringify(statusCallback)}`);
-        // Do something and then emit the event type
-        const callSid = statusCallback.CallSid;
-        logOut('TwilioService', `Returning evaluated status callback for callSid: ${callSid}`);
-        return statusCallback;
+    async evaluateStatusCallback(statusCallback: StatusCallback): Promise<StatusCallback | null> {
+        try {
+            logOut('TwilioService', `Evaluating status callback: ${JSON.stringify(statusCallback)}`);
+            // Do something and then emit the event type
+            const callSid = statusCallback.CallSid;
+            logOut('TwilioService', `Returning evaluated status callback for callSid: ${callSid}`);
+            return statusCallback;
+        } catch (error) {
+            logError('TwilioService', `Error evaluating status callback: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
     }
 }
 

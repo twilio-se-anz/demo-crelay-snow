@@ -71,20 +71,46 @@
 import { EventEmitter } from 'events';
 import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
+import { ResponseService } from './ResponseService.js';
 
-const {
-    TWILIO_FUNCTIONS_URL
-} = process.env;
+/**
+ * Interface for session data
+ */
+interface SessionData {
+    parameterData: Record<string, any>;
+    setupData: {
+        callSid: string;
+        [key: string]: any;
+    };
+}
+
+/**
+ * Interface for incoming message
+ */
+interface IncomingMessage {
+    type: 'setup' | 'prompt' | 'dtmf' | 'interrupt' | 'info' | 'error';
+    voicePrompt?: string;
+    utteranceUntilInterrupt?: string;
+    digit?: string;
+    description?: string;
+    [key: string]: any;
+}
 
 class ConversationRelayService extends EventEmitter {
+    private responseService: ResponseService;
+    private sessionData: SessionData;
+    private silenceHandler: SilenceHandler | null;
+    private logMessage: string | null;
+
     /**
      * Creates a new ConversationRelayService instance.
      * Initializes event handlers for LLM responses and sets up silence detection.
      * 
-     * @param {Object} responseService - LLM service for processing responses
+     * @param {ResponseService} responseService - LLM service for processing responses
+     * @param {SessionData} sessionData - Session data for the conversation
      * @throws {Error} If responseService is not provided
      */
-    constructor(responseService, sessionData) {
+    constructor(responseService: ResponseService, sessionData: SessionData) {
         super();
         if (!responseService) {
             throw new Error('LLM service is required');
@@ -118,32 +144,31 @@ class ConversationRelayService extends EventEmitter {
      * This method is called once at the start of a new conversation.
      * 
      * @async
-     * @param {Object} sessionData - Session and parameter information
-     * @param {Object} sessionData.parameterData - Parameter data passed through the conversation relay
-     * @param {Object} sessionData.setupData - Call setup information
-     * @param {string} sessionData.setupData.callSid - Unique call identifier
+     * @param {SessionData} sessionData - Session and parameter information
      * @emits conversationRelay.silence
      * @returns {Promise<void>} Resolves when setup is complete
      */
-    async setupMessage(sessionData) {
+    async setupMessage(sessionData: SessionData): Promise<void> {
         // Pull out session data parts into own variables
         const { parameterData, setupData } = sessionData;
-        this.logMessage = `Call SID: ${setupData.callSid}] `
+        this.logMessage = `Call SID: ${setupData.callSid}] `;
 
         // This first system message pushes all the data into the Response Service in preparation for the conversation under generateResponse.
         const initialMessage = `These are all the details of the call: ${JSON.stringify(setupData, null, 4)} and the parameter data needed to complete your objective: ${JSON.stringify(parameterData, null, 4)}. Use this to complete your objective`;
-        this.responseService.insertMessageIntoContext('system', initialMessage);
+        await this.responseService.insertMessageIntoContext('system', initialMessage);
 
         // Initialize and start silence monitoring. When triggered it will emit a 'silence' event with a message
-        this.silenceHandler.startMonitoring((silenceMessage) => {
-            // Add callSid to silence message if it's a text message
-            if (silenceMessage.type === 'text') {
-                logOut(`Conversation Relay`, `${this.logMessage} Sending silence breaker message: ${JSON.stringify(silenceMessage)}`);
-            } else if (silenceMessage.type === 'end') {
-                logOut(`Conversation Relay`, `${this.logMessage} Ending call due to silence: ${JSON.stringify(silenceMessage)}`);
-            }
-            this.emit('conversationRelay.silence', silenceMessage);
-        });
+        if (this.silenceHandler) {
+            this.silenceHandler.startMonitoring((silenceMessage) => {
+                // Add callSid to silence message if it's a text message
+                if (silenceMessage.type === 'text') {
+                    logOut(`Conversation Relay`, `${this.logMessage} Sending silence breaker message: ${JSON.stringify(silenceMessage)}`);
+                } else if (silenceMessage.type === 'end') {
+                    logOut(`Conversation Relay`, `${this.logMessage} Ending call due to silence: ${JSON.stringify(silenceMessage)}`);
+                }
+                this.emit('conversationRelay.silence', silenceMessage);
+            });
+        }
 
         logOut(`Conversation Relay`, `${this.logMessage} Setup complete`);
     }
@@ -158,16 +183,12 @@ class ConversationRelayService extends EventEmitter {
      * - setup: Initial setup messages
      * 
      * @async
-     * @param {Object} message - Incoming message object
-     * @param {string} message.type - Message type ('info'|'prompt'|'interrupt'|'dtmf'|'setup')
-     * @param {string} [message.voicePrompt] - Voice prompt content for 'prompt' type
-     * @param {string} [message.utteranceUntilInterrupt] - Partial utterance for 'interrupt' type
-     * @param {string} [message.digit] - DTMF digit for 'dtmf' type
+     * @param {IncomingMessage} message - Incoming message object
      * @emits conversationRelay.prompt
      * @throws {Error} If message handling fails
      * @returns {Promise<void>} Resolves when message is processed
      */
-    async incomingMessage(message) {
+    async incomingMessage(message: IncomingMessage): Promise<void> {
         try {
             // Only reset silence timer for non-info messages
             if (this.silenceHandler && message.type !== 'info') {
@@ -177,11 +198,11 @@ class ConversationRelayService extends EventEmitter {
             switch (message.type) {
                 case 'setup':
                     logOut(`Conversation Relay`, `${this.logMessage} SETUP: ${JSON.stringify(message)}`);
-                    this.setupMessage(this.sessionData);
+                    await this.setupMessage(this.sessionData);
                     break;
                 case 'prompt':
                     logOut(`Conversation Relay`, `${this.logMessage} PROMPT ${message.voicePrompt}`);
-                    this.responseService.generateResponse('user', message.voicePrompt);
+                    await this.responseService.generateResponse('user', message.voicePrompt || '');
                     break;
                 case 'dtmf':
                     logOut(`Conversation Relay`, `${this.logMessage} DTMF: ${message.digit}`);
@@ -201,8 +222,8 @@ class ConversationRelayService extends EventEmitter {
                     logError(`Conversation Relay`, `${this.logMessage} UNKNOWN: "${message.type}"`);
             }
         } catch (error) {
-            logError(`Conversation Relay`, `${this.logMessage} Error in message handling: ${error}`);
-            throw new Error(`Conversation Relay Switch Message type ${message.type}: ${this.logMessage} Error in message handling: ${error}`);
+            logError(`Conversation Relay`, `${this.logMessage} Error in message handling: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(`Conversation Relay Switch Message type ${message.type}: ${this.logMessage} Error in message handling: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -217,13 +238,13 @@ class ConversationRelayService extends EventEmitter {
      * @throws {Error} If message handling fails
      * @returns {Promise<void>} Resolves when message is processed
      */
-    async outgoingMessage(message) {
+    async outgoingMessage(message: string): Promise<void> {
         try {
             logOut(`Conversation Relay`, `${this.logMessage} Outgoing message from Agent: ${message}`);
-            this.responseService.insertMessageIntoContext(message);
+            await this.responseService.insertMessageIntoContext('system', message);
             this.emit('conversationRelay.outgoingMessage', message);
         } catch (error) {
-            logError(`Conversation Relay`, `${this.logMessage} Error in outgoing message handling: ${error}`);
+            logError(`Conversation Relay`, `${this.logMessage} Error in outgoing message handling: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -237,7 +258,7 @@ class ConversationRelayService extends EventEmitter {
      * Call this method when the conversation is complete to prevent memory leaks
      * and ensure proper resource cleanup.
      */
-    cleanup() {
+    cleanup(): void {
         if (this.silenceHandler) {
             this.silenceHandler.cleanup();
             this.silenceHandler = null;
