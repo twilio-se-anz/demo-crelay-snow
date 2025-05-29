@@ -158,19 +158,15 @@ class ResponseService extends EventEmitter {
      * @returns {Promise<ToolResult|null>} Tool execution result or null if execution fails
      */
     async executeToolCall(tool: ResponsesAPIToolCall): Promise<ToolResult | null> {
-        logOut('ResponseService', `Executing tool call with tool being: ${JSON.stringify(tool, null, 4)} `);
-
         try {
             let calledTool = this.loadedTools[tool.name];
             let calledToolArgs = JSON.parse(tool.arguments);
-            logOut('ResponseService', `Executing tool call: ${tool.name} with args: ${JSON.stringify(calledToolArgs, null, 4)}`);
-
             // Now run the loaded tool
             let toolResponse = await calledTool(calledToolArgs);
 
             return toolResponse;
         } catch (error) {
-            console.error(`ResponseService executeToolCall, Error executing tool ${tool.name}:`, error instanceof Error ? error.message : String(error));
+            logError('ResponseService', `Tool call failed: ${tool.name} with arguments: ${tool.arguments}`);
             return null;
         }
     }
@@ -235,8 +231,6 @@ class ResponseService extends EventEmitter {
      * @param {string} message - Message content to add to context
      */
     async insertMessageIntoContext(role: 'system' | 'user' | 'assistant' = 'system', message: string): Promise<void> {
-        logOut('ResponseService', `Inserting message into context: ${role}: ${message}`);
-
         try {
             if (role === 'system') {
                 // System messages can be added as instructions updates
@@ -262,21 +256,15 @@ class ResponseService extends EventEmitter {
      * @throws {Error} If file loading fails
      */
     async updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void> {
-        logOut('ResponseService', `Updating context with new files: ${contextFile}, ${toolManifestFile}`);
 
         const __filename = fileURLToPath(import.meta.url);
-        logOut('ResponseService', `Current file: ${__filename}`);
         const __dirname = dirname(__filename);
-        logOut('ResponseService', `Current directory: ${__dirname}`);
 
         try {
             // Load new context and tool manifest from provided file paths
             const assetsDir = path.join(__dirname, '..', '..', 'assets');
-            logOut('ResponseService', `Loading context and tool manifest from: ${assetsDir}`);
             const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
             const toolManifestPath = path.join(assetsDir, toolManifestFile);
-            logOut('ResponseService', `Loading tool manifest from: ${toolManifestPath}`);
-
             const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: any[] };
 
             // Update instructions and reset conversation
@@ -296,7 +284,6 @@ class ResponseService extends EventEmitter {
                     try {
                         // Dynamic import for ES modules - use same path resolution as ChatCompletions version
                         const toolsDir = path.join(__dirname, '..', 'tools');
-                        logOut('ResponseService', `Loading tool: ${functionName} from ${path.join(toolsDir, `${functionName}.js`)}`);
                         const toolModule = await import(path.join(toolsDir, `${functionName}.js`));
                         this.loadedTools[functionName] = toolModule.default;
                         logOut('ResponseService', `Loaded function: ${functionName}`);
@@ -337,9 +324,6 @@ class ResponseService extends EventEmitter {
 
             const eventData = event as ResponsesAPIEvent;
 
-            // Log all event types for debugging
-            logOut('ResponseService', `Stream event type: ${eventData.type}`);
-
             // Handle different event types from the Responses API
             if (eventData.type === 'response.output_text.delta') {
                 // Text content streaming
@@ -353,9 +337,6 @@ class ResponseService extends EventEmitter {
                 }
             }
             else if (eventData.type === 'response.output_item.added') {
-                // Check if this is a function call item being added
-                logOut('ResponseService', `Output item added: ${JSON.stringify(eventData, null, 4)}`);
-
                 if (eventData.item?.type === 'function_call') {
                     currentToolCall = {
                         id: eventData.item.id || 'unknown',
@@ -364,35 +345,24 @@ class ResponseService extends EventEmitter {
                         name: eventData.item.name || '',
                         arguments: eventData.item.arguments || ''
                     };
-                    logOut('ResponseService', `New function call started: ${currentToolCall.name}`);
                 }
             }
             else if (eventData.type === 'response.function_call_arguments.delta') {
                 // Function call arguments streaming - accumulate the arguments
-                logOut('ResponseService', `Function call arguments delta received: ${JSON.stringify(eventData, null, 4)}`);
-
                 if (currentToolCall && eventData.delta) {
                     currentToolCall.arguments += eventData.delta;
-                    logOut('ResponseService', `Function arguments updated: ${currentToolCall.arguments}`);
                 }
             }
             else if (eventData.type === 'response.function_call_arguments.done') {
                 // Function call completed - execute it and create follow-up response
-                logOut('ResponseService', `Function call arguments completed: ${JSON.stringify(eventData, null, 4)}`);
-                logOut('ResponseService', `Current tool call state: ${JSON.stringify(currentToolCall, null, 4)}`);
-
                 if (currentToolCall) {
-                    logOut('ResponseService', `Executing tool call: ${currentToolCall.name} with args: ${currentToolCall.arguments}`);
                     try {
                         const toolResult = await this.executeToolCall(currentToolCall);
-                        logOut('ResponseService', `Tool call result: ${JSON.stringify(toolResult, null, 4)}`);
 
                         if (toolResult) {
                             logOut('ResponseService', `Tool result type: ${toolResult.toolType}`);
                             switch (toolResult.toolType) {
                                 case "tool":
-                                    logOut('ResponseService', `Processing tool result for conversation continuation`);
-
                                     // Add function call to input messages
                                     this.inputMessages.push({
                                         type: 'function_call',
@@ -409,10 +379,7 @@ class ResponseService extends EventEmitter {
                                         output: JSON.stringify(toolResult.toolData)
                                     });
 
-                                    logOut('ResponseService', `Updated input messages length: ${this.inputMessages.length}`);
-
                                     // Create follow-up response with tool results
-                                    logOut('ResponseService', `Creating follow-up response with tool results`);
                                     const followUpStream = await this.openai.responses.create({
                                         model: this.model,
                                         input: this.inputMessages,
@@ -427,18 +394,17 @@ class ResponseService extends EventEmitter {
                                     break;
                                 case "crelay":
                                     // Emit the tool result so CR can use it
-                                    logOut('ResponseService', `Tool selected: crelay`);
                                     this.emit('responseService.toolResult', toolResult);
                                     break;
                                 case "error":
                                     // Log error - API will handle the error context
-                                    logOut('ResponseService', `Tool error: ${toolResult.toolData}`);
+                                    logError('ResponseService', `Tool error: ${toolResult.toolData}`);
                                     break;
                                 default:
-                                    logOut('ResponseService', `No tool type selected. Using default processor`);
+                                    logError('ResponseService', `No tool type selected`);
                             }
                         } else {
-                            logOut('ResponseService', `Tool execution returned null result`);
+                            logError('ResponseService', `Tool execution returned null result`);
                         }
                     } catch (error) {
                         logError('ResponseService', `Error executing tool ${currentToolCall.name}: ${error instanceof Error ? error.message : String(error)}`);
@@ -446,16 +412,14 @@ class ResponseService extends EventEmitter {
 
                     currentToolCall = null;
                 } else {
-                    logOut('ResponseService', `Function call completed but no currentToolCall available`);
+                    logError('ResponseService', `Function call completed but no currentToolCall available`);
                 }
             }
 
             else if (eventData.type === 'response.done') {
                 // Response completed - store the response ID for conversation continuity
-                logOut('ResponseService', `Response completed: ${JSON.stringify(eventData, null, 4)}`);
                 if (eventData.data?.id) {
                     this.currentResponseId = eventData.data.id;
-                    logOut('ResponseService', `Response completed with ID: ${this.currentResponseId}`);
                 }
 
                 // Only emit final content marker if this is the end of the conversation
@@ -509,7 +473,6 @@ class ResponseService extends EventEmitter {
      */
     async generateResponse(role: 'user' | 'system' = 'user', prompt: string): Promise<void> {
         this.isInterrupted = false;
-        logOut('ResponseService', `Generating response for ${role}: ${prompt}`);
 
         try {
             // Add the new message to input messages
@@ -519,7 +482,6 @@ class ResponseService extends EventEmitter {
             });
 
             const tools = this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined;
-            logOut('ResponseService', `generateResponse tools: ${JSON.stringify(tools, null, 4)}`);
 
             // Create the response with streaming enabled
             const createParams: any = {
@@ -539,8 +501,6 @@ class ResponseService extends EventEmitter {
             }
 
             const stream = await this.openai.responses.create(createParams);
-
-            logOut('ResponseService', `Response stream created`);
 
             // Process the stream using the helper method
             await this.processStream(stream);
