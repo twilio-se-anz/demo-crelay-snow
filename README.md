@@ -2,9 +2,27 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v3.0
+## Release v3.1
 
-This project has been converted from JavaScript to TypeScript. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
+This release introduces a significant architectural improvement with the migration from OpenAI's ChatCompletion API to the Response API, providing enhanced flexibility and future-proofing for LLM integrations.
+
+### Migration to Response API
+
+The system has been updated to use OpenAI's Response API instead of the ChatCompletion API, bringing several key benefits:
+
+- **Enhanced Robustness**: The Response API provides more reliable streaming capabilities and better error handling
+- **Improved Flexibility**: Support for additional response formats and processing options
+- **Future-Proof Architecture**: Better alignment with OpenAI's evolving API ecosystem
+- **Multi-Provider Support**: Foundation for easier integration of additional LLM providers beyond OpenAI
+
+### Key Changes
+
+- **ResponseService Architecture**: The OpenAIService has been enhanced with a new ResponseService base class that abstracts LLM interactions
+- **Unified Interface**: All LLM providers now implement a consistent interface through the ResponseService pattern
+- **Enhanced Error Handling**: Improved error detection and recovery mechanisms
+- **Streaming Optimization**: Better handling of streaming responses with interrupt capabilities
+
+This migration maintains full backward compatibility while providing a more robust foundation for future enhancements. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
 1. There is a main Server that has two functions:
    - It is a WebSocket server - The Websocket server maintains a connection and relays messages between the two parties. It is the core of the conversation relay system.
@@ -542,16 +560,35 @@ The system supports four distinct tool types:
 
 #### Implementation
 
-The ResponseService processes tool results based on their type:
+The ResponseService processes tool results based on their type using the new Response API architecture:
 
 ```typescript
 switch (toolResult.toolType) {
   case "tool":
-    // Add to conversation history for LLM to process
-    this.promptMessagesArray.push({
-      role: "tool",
-      content: JSON.stringify(toolResult.toolData),
-      tool_call_id: toolCallObj.id
+    // Add function call to input messages
+    this.inputMessages.push({
+      type: 'function_call',
+      id: currentToolCall.id,
+      call_id: currentToolCall.call_id,
+      name: currentToolCall.name,
+      arguments: currentToolCall.arguments
+    });
+
+    // Add function result to input messages
+    this.inputMessages.push({
+      type: 'function_call_output',
+      call_id: currentToolCall.call_id,
+      output: JSON.stringify(toolResult.toolData)
+    });
+
+    // Create follow-up response with tool results
+    const followUpStream = await this.openai.responses.create({
+      model: this.model,
+      input: this.inputMessages,
+      tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
+      previous_response_id: this.currentResponseId,
+      stream: true,
+      store: true
     });
     break;
   case "crelay":
@@ -559,11 +596,8 @@ switch (toolResult.toolType) {
     this.emit('responseService.toolResult', toolResult);
     break;
   case "error":
-    // Add as system message to conversation history
-    this.promptMessagesArray.push({
-      role: "system",
-      content: toolResult.toolData
-    });
+    // Log error - API will handle the error context
+    logError('ResponseService', `Tool error: ${toolResult.toolData}`);
     break;
 }
 ```

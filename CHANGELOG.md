@@ -1,5 +1,35 @@
 # Changelog
 
+## Release v3.1
+
+This release introduces a significant architectural improvement with the migration from OpenAI's ChatCompletion API to the Response API, providing enhanced flexibility and future-proofing for LLM integrations.
+
+### Migration to Response API
+
+The system has been updated to use OpenAI's Response API instead of the ChatCompletion API, bringing several key benefits:
+
+- **Enhanced Robustness**: The Response API provides more reliable streaming capabilities and better error handling
+- **Improved Flexibility**: Support for additional response formats and processing options  
+- **Future-Proof Architecture**: Better alignment with OpenAI's evolving API ecosystem
+- **Multi-Provider Support**: Foundation for easier integration of additional LLM providers beyond OpenAI
+
+### Key Changes
+
+- **ResponseService Architecture**: The OpenAIService has been enhanced with a new ResponseService base class that abstracts LLM interactions
+- **Unified Interface**: All LLM providers now implement a consistent interface through the ResponseService pattern
+- **Enhanced Error Handling**: Improved error detection and recovery mechanisms
+- **Streaming Optimization**: Better handling of streaming responses with interrupt capabilities
+
+### Technical Improvements
+
+- Migrated from ChatCompletion API to Response API for all OpenAI interactions
+- Implemented ResponseService base class for consistent LLM provider abstraction
+- Enhanced streaming response handling with improved interrupt capabilities
+- Improved error handling and recovery mechanisms across all LLM interactions
+- Maintained full backward compatibility while providing foundation for future enhancements
+
+This migration maintains full backward compatibility while providing a more robust foundation for future enhancements and multi-provider LLM support.
+
 ## Release v3.0
 
 - Converted the entire project from JavaScript to TypeScript
