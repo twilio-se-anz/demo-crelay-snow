@@ -232,15 +232,22 @@ class ResponseService extends EventEmitter {
      */
     async insertMessageIntoContext(role: 'system' | 'user' | 'assistant' = 'system', message: string): Promise<void> {
         try {
-            if (role === 'system') {
-                // System messages can be added as instructions updates
-                this.instructions += `\n\n${message}`;
-            } else if (role === 'user' || role === 'assistant') {
-                // For user/assistant messages, add to input messages
-                this.inputMessages.push({
-                    role: role,
-                    content: message
-                });
+            switch (role) {
+                case 'system':
+                    // System messages can be added as instructions updates
+                    this.instructions += `\n\n${message}`;
+                    break;
+                case 'user':
+                case 'assistant':
+                    // For user/assistant messages, add to input messages
+                    this.inputMessages.push({
+                        role: role,
+                        content: message
+                    });
+                    break;
+                default:
+                    logError('ResponseService', `Unknown role: ${role}`);
+                    break;
             }
         } catch (error) {
             logError('ResponseService', `Error inserting message into context: ${error instanceof Error ? error.message : String(error)}`);
@@ -325,112 +332,130 @@ class ResponseService extends EventEmitter {
             const eventData = event as ResponsesAPIEvent;
 
             // Handle different event types from the Responses API
-            if (eventData.type === 'response.output_text.delta') {
-                // Text content streaming
-                const content = eventData.delta || '';
-                if (content) {
-                    this.emit('responseService.content', {
-                        type: "text",
-                        token: content,
-                        last: false
-                    } as ContentResponse);
-                }
-            }
-            else if (eventData.type === 'response.output_item.added') {
-                if (eventData.item?.type === 'function_call') {
-                    currentToolCall = {
-                        id: eventData.item.id || 'unknown',
-                        type: 'function_call',
-                        call_id: eventData.item.call_id || eventData.item.id || 'unknown',
-                        name: eventData.item.name || '',
-                        arguments: eventData.item.arguments || ''
-                    };
-                }
-            }
-            else if (eventData.type === 'response.function_call_arguments.delta') {
-                // Function call arguments streaming - accumulate the arguments
-                if (currentToolCall && eventData.delta) {
-                    currentToolCall.arguments += eventData.delta;
-                }
-            }
-            else if (eventData.type === 'response.function_call_arguments.done') {
-                // Function call completed - execute it and create follow-up response
-                if (currentToolCall) {
-                    try {
-                        const toolResult = await this.executeToolCall(currentToolCall);
+            switch (eventData.type) {
+                case 'response.output_text.delta':
+                    // Text content streaming
+                    const content = eventData.delta || '';
+                    if (content) {
+                        this.emit('responseService.content', {
+                            type: "text",
+                            token: content,
+                            last: false
+                        } as ContentResponse);
+                    }
+                    break;
 
-                        if (toolResult) {
-                            logOut('ResponseService', `Tool result type: ${toolResult.toolType}`);
-                            switch (toolResult.toolType) {
-                                case "tool":
-                                    // Add function call to input messages
-                                    this.inputMessages.push({
-                                        type: 'function_call',
-                                        id: currentToolCall.id,
-                                        call_id: currentToolCall.call_id,
-                                        name: currentToolCall.name,
-                                        arguments: currentToolCall.arguments
-                                    });
+                case 'response.output_item.added':
+                    if (eventData.item?.type === 'function_call') {
+                        currentToolCall = {
+                            id: eventData.item.id || 'unknown',
+                            type: 'function_call',
+                            call_id: eventData.item.call_id || eventData.item.id || 'unknown',
+                            name: eventData.item.name || '',
+                            arguments: eventData.item.arguments || ''
+                        };
+                    }
+                    break;
 
-                                    // Add function result to input messages
-                                    this.inputMessages.push({
-                                        type: 'function_call_output',
-                                        call_id: currentToolCall.call_id,
-                                        output: JSON.stringify(toolResult.toolData)
-                                    });
+                case 'response.function_call_arguments.delta':
+                    // Function call arguments streaming - accumulate the arguments
+                    if (currentToolCall && eventData.delta) {
+                        currentToolCall.arguments += eventData.delta;
+                    }
+                    break;
 
-                                    // Create follow-up response with tool results
-                                    const followUpStream = await this.openai.responses.create({
-                                        model: this.model,
-                                        input: this.inputMessages,
-                                        tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
-                                        previous_response_id: this.currentResponseId,
-                                        stream: true,
-                                        store: true
-                                    });
+                case 'response.function_call_arguments.done':
+                    // Function call completed - execute it and create follow-up response
+                    if (currentToolCall) {
+                        try {
+                            const toolResult = await this.executeToolCall(currentToolCall);
 
-                                    // Process the follow-up stream recursively
-                                    await this.processStream(followUpStream);
-                                    break;
-                                case "crelay":
-                                    // Emit the tool result so CR can use it
-                                    this.emit('responseService.toolResult', toolResult);
-                                    break;
-                                case "error":
-                                    // Log error - API will handle the error context
-                                    logError('ResponseService', `Tool error: ${toolResult.toolData}`);
-                                    break;
-                                default:
-                                    logError('ResponseService', `No tool type selected`);
+                            if (toolResult) {
+                                logOut('ResponseService', `Tool result type: ${toolResult.toolType}`);
+                                switch (toolResult.toolType) {
+                                    case "tool":
+                                        // Add function call to input messages
+                                        this.inputMessages.push({
+                                            type: 'function_call',
+                                            id: currentToolCall.id,
+                                            call_id: currentToolCall.call_id,
+                                            name: currentToolCall.name,
+                                            arguments: currentToolCall.arguments
+                                        });
+
+                                        // Add function result to input messages
+                                        this.inputMessages.push({
+                                            type: 'function_call_output',
+                                            call_id: currentToolCall.call_id,
+                                            output: JSON.stringify(toolResult.toolData)
+                                        });
+
+                                        // Create follow-up response with tool results
+                                        const followUpStream = await this.openai.responses.create({
+                                            model: this.model,
+                                            input: this.inputMessages,
+                                            tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
+                                            previous_response_id: this.currentResponseId,
+                                            stream: true,
+                                            store: true
+                                        });
+
+                                        // Process the follow-up stream recursively
+                                        await this.processStream(followUpStream);
+                                        break;
+                                    case "crelay":
+                                        // Emit the tool result so CR can use it
+                                        this.emit('responseService.toolResult', toolResult);
+                                        break;
+                                    case "error":
+                                        // Log error - API will handle the error context
+                                        logError('ResponseService', `Tool error: ${toolResult.toolData}`);
+                                        break;
+                                    default:
+                                        logError('ResponseService', `No tool type selected`);
+                                }
+                            } else {
+                                logError('ResponseService', `Tool execution returned null result`);
                             }
-                        } else {
-                            logError('ResponseService', `Tool execution returned null result`);
+                        } catch (error) {
+                            logError('ResponseService', `Error executing tool ${currentToolCall.name}: ${error instanceof Error ? error.message : String(error)}`);
                         }
-                    } catch (error) {
-                        logError('ResponseService', `Error executing tool ${currentToolCall.name}: ${error instanceof Error ? error.message : String(error)}`);
+
+                        currentToolCall = null;
+                    } else {
+                        logError('ResponseService', `Function call completed but no currentToolCall available`);
+                    }
+                    break;
+
+                case 'response.done':
+                    // Response completed - store the response ID for conversation continuity
+                    if (eventData.data?.id) {
+                        this.currentResponseId = eventData.data.id;
                     }
 
-                    currentToolCall = null;
-                } else {
-                    logError('ResponseService', `Function call completed but no currentToolCall available`);
-                }
-            }
-
-            else if (eventData.type === 'response.done') {
-                // Response completed - store the response ID for conversation continuity
-                if (eventData.data?.id) {
-                    this.currentResponseId = eventData.data.id;
-                }
-
-                // Only emit final content marker if this is the end of the conversation
-                // (not if we're about to create a follow-up for tool results)
-                if (!currentToolCall) {
-                    this.emit('responseService.content', {
-                        type: "text",
-                        token: '',
-                        last: true
-                    } as ContentResponse);
-                }
+                    // Only emit final content marker if this is the end of the conversation
+                    // (not if we're about to create a follow-up for tool results)
+                    if (!currentToolCall) {
+                        this.emit('responseService.content', {
+                            type: "text",
+                            token: '',
+                            last: true
+                        } as ContentResponse);
+                    }
+                    break;
+                case 'response.created':
+                case 'response.in_progress':
+                case 'response.content_part.added':
+                case 'response.content_part.done':
+                case 'response.output_item.done':
+                case 'response.completed':
+                case 'response.output_text.done':
+                    // These events don't require special handling
+                    break;
+                default:
+                    // Handle any unrecognized event types
+                    logOut('ResponseService', `Unhandled event type: ${eventData.type}`);
+                    break;
             }
         }
     }
