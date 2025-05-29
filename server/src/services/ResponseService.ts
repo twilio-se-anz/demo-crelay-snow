@@ -1,9 +1,9 @@
 /**
- * Base service class for handling LLM API interactions and managing conversation flow.
+ * Base service class for handling LLM API interactions using OpenAI's Responses API and managing conversation flow.
  * This service orchestrates:
  * 
  * 1. Message Management:
- *    - Maintains conversation history
+ *    - Utilizes OpenAI's stateful conversation history management
  *    - Processes incoming messages
  *    - Handles tool calls and responses
  *    - Manages streaming responses
@@ -36,11 +36,12 @@
  * @extends EventEmitter
  * @property {OpenAI} openai - OpenAI API client instance
  * @property {string} model - Model to use (from environment variables)
- * @property {Array} messages - Conversation history
- * @property {string} promptContext - Initial context from context.md
+ * @property {string} currentResponseId - Current response ID for conversation continuity
+ * @property {string} instructions - System instructions/context from context.md
  * @property {Object} toolManifest - Tool definitions from toolManifest.json
  * @property {boolean} isInterrupted - Flag for interrupting response generation
  * @property {Object} loadedTools - Map of loaded tool functions
+ * @property {Array} inputMessages - Message history for Responses API
  * 
  * Events Emitted:
  * - responseService.content: Response content chunks
@@ -53,9 +54,14 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
-
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+
+// Import proper OpenAI types 
+// Note: ResponseInput is not yet exported in main OpenAI namespace (see issue #1378)
+// Using direct import as recommended workaround until it's properly exported
+import type { ResponseInput } from 'openai/resources/responses/responses.mjs';
+
 import { logOut, logError } from '../utils/logger.js';
 
 dotenv.config();
@@ -67,24 +73,6 @@ interface ContentResponse {
     type: string;
     token: string;
     last: boolean;
-}
-
-/**
- * Interface for OpenAI tool definition (legacy, for manifest parsing only)
- */
-export interface OpenAIFunctionDefinition {
-    type: "function";
-    name: string;
-    description: string;
-    parameters: {
-        type: "object";
-        properties: Record<string, {
-            type: string;
-            description: string;
-        }>;
-        required: string[];
-        additionalProperties?: boolean;
-    };
 }
 
 /**
@@ -101,50 +89,41 @@ interface ToolResult {
 type ToolFunction = (args: any) => Promise<ToolResult> | ToolResult;
 
 /**
- * Interface for OpenAI tool call
+ * Interface for tool call from streaming events
  */
-interface OpenAIToolCall {
-    id?: string;
-    type?: string;
-    function?: {
-        name?: string;
-        arguments?: string;
-    };
-}
-
-/**
- * Interface for our internal tool call representation
- */
-interface ToolCall {
+interface ResponsesAPIToolCall {
     id: string;
-    type: string;
-    function: {
-        name: string;
-        arguments: string;
-    };
+    type: 'function_call';
+    call_id: string;
+    name: string;
+    arguments: string;
 }
 
 /**
- * Service for handling LLM API interactions and managing conversation flow.
- * @class
+ * Interface for streaming events from Responses API
  */
+interface ResponsesAPIEvent {
+    type: string;
+    delta?: string;
+    data?: any;
+    id?: string;
+    response_id?: string;
+    item_id?: string;
+    output_index?: number;
+    item?: any;
+    arguments?: string;
+}
+
 class ResponseService extends EventEmitter {
     protected openai: OpenAI;
     protected model: string;
-    protected promptInputArray: Array<OpenAI.Responses.ResponseInputItem>;
+    protected currentResponseId: string | null;
+    protected instructions: string;
     protected isInterrupted: boolean;
-    /**
-     * Tool manifest loaded from file, containing tool definitions.
-     */
-    protected toolManifest: { tools: OpenAIFunctionDefinition[] };
-    /**
-     * Array of API function definitions.
-     */
-    protected toolDefinitions: OpenAI.Responses.FunctionTool[];
-    /**
-     * Map of loaded tool functions.
-     */
+    protected toolManifest: { tools: any[] };
+    protected toolDefinitions: any[];
     protected loadedTools: Record<string, ToolFunction>;
+    protected inputMessages: ResponseInput;
 
     /**
      * Creates a new ResponseService instance.
@@ -155,12 +134,14 @@ class ResponseService extends EventEmitter {
     constructor() {
         super();
         this.openai = new OpenAI();
-        this.model = "";
-        this.promptInputArray = [];
+        this.model = process.env.OPENAI_MODEL || "gpt-4o";
+        this.currentResponseId = null;
+        this.instructions = '';
         this.isInterrupted = false;
         this.toolManifest = { tools: [] };
         this.toolDefinitions = [];
         this.loadedTools = {};
+        this.inputMessages = [];
 
         // Which Context, Tool Manifest to use for this call (or the default)
         const contextFile = process.env.LLM_CONTEXT || 'defaultContext.md';
@@ -173,46 +154,44 @@ class ResponseService extends EventEmitter {
     /**
      * Executes a tool call based on function calling feature.
      * 
-     * @param {ToolCall} tool - Tool call object
+     * @param {ResponsesAPIToolCall} tool - Tool call object
      * @returns {Promise<ToolResult|null>} Tool execution result or null if execution fails
      */
-    async executeToolCall(tool: ToolCall): Promise<ToolResult | null> {
+    async executeToolCall(tool: ResponsesAPIToolCall): Promise<ToolResult | null> {
         logOut('ResponseService', `Executing tool call with tool being: ${JSON.stringify(tool, null, 4)} `);
 
         try {
-            let calledTool = this.loadedTools[tool.function.name];
-            let calledToolArgs = JSON.parse(tool.function.arguments);
-            logOut('ResponseService', `Executing tool call: ${tool.function.name} with args: ${JSON.stringify(calledToolArgs, null, 4)}`);
+            let calledTool = this.loadedTools[tool.name];
+            let calledToolArgs = JSON.parse(tool.arguments);
+            logOut('ResponseService', `Executing tool call: ${tool.name} with args: ${JSON.stringify(calledToolArgs, null, 4)}`);
 
             // Now run the loaded tool
             let toolResponse = await calledTool(calledToolArgs);
 
             return toolResponse;
         } catch (error) {
-            console.error(`ResponseService executeToolCall, Error executing tool ${tool.function.name}:`, error instanceof Error ? error.message : String(error));
+            console.error(`ResponseService executeToolCall, Error executing tool ${tool.name}:`, error instanceof Error ? error.message : String(error));
             return null;
         }
     }
 
     /**
-     * Retrieves the current conversation history.
+     * Retrieves the current conversation ID for state management.
      * 
-     * @returns {Array<OpenAI.Responses.ResponseInputItem>} Array of message objects
+     * @returns {string|null} Current response ID or null if no active conversation
      */
-    getMessages(): Array<OpenAI.Responses.ResponseInputItem> {
-        return this.promptInputArray;
+    getCurrentResponseId(): string | null {
+        return this.currentResponseId;
     }
 
     /**
-     * Clears conversation history except for the initial system message.
+     * Clears conversation history by resetting the response ID and input messages.
+     * This will start a new conversation thread with the Responses API.
      */
     clearMessages(): void {
-        if (this.promptInputArray.length > 0) {
-            const systemMessage = this.promptInputArray[0];
-            this.promptInputArray = [systemMessage];
-        } else {
-            this.promptInputArray = [];
-        }
+        this.currentResponseId = null;
+        this.inputMessages = [];
+        logOut('ResponseService', 'Cleared conversation history - will start new thread');
     }
 
     /**
@@ -227,7 +206,7 @@ class ResponseService extends EventEmitter {
      * 3. Allowing the system to process the new user input
      * 
      * This enables more natural conversation flow by letting users
-     * interrupt lengthy responses or redirect the conversation.
+     * interrupt lengthy responses without waiting for completion.
      */
     interrupt(): void {
         this.isInterrupted = true;
@@ -250,48 +229,34 @@ class ResponseService extends EventEmitter {
 
     /**
      * Inserts a message into conversation context without generating a response.
-     * Used for live agent handling when an agent interjects in the conversation.
+     * With the Responses API, this is handled by adding to the input messages array.
      * 
-     * @param {string} role - Message role ('system' or 'user')
+     * @param {string} role - Message role ('system', 'user', or 'assistant')
      * @param {string} message - Message content to add to context
      */
-    /**
-     * Inserts a message into conversation context without generating a response.
-     * Used for live agent handling when an agent interjects in the conversation.
-     * 
-     * @param {string} role - Message role ('system', 'user', 'assistant', or 'tool')
-     * @param {string} message - Message content to add to context
-     */
-    async insertMessageIntoContext(role: 'system' | 'user' | 'assistant' | 'tool' = 'system', message: string): Promise<void> {
+    async insertMessageIntoContext(role: 'system' | 'user' | 'assistant' = 'system', message: string): Promise<void> {
         logOut('ResponseService', `Inserting message into context: ${role}: ${message}`);
 
-        // In the updated API structure, 'tool' role messages are handled as 'assistant' messages
-        if (role === 'tool') {
-            // For tool messages, convert to assistant role to match how tool results are handled in generateResponse
-            this.promptInputArray.push({
-                role: 'assistant',
-                content: message
-            });
-        } else {
-            // For other roles (system, user, assistant), add them directly
-            this.promptInputArray.push({
-                role,
-                content: message
-            });
+        try {
+            if (role === 'system') {
+                // System messages can be added as instructions updates
+                this.instructions += `\n\n${message}`;
+            } else if (role === 'user' || role === 'assistant') {
+                // For user/assistant messages, add to input messages
+                this.inputMessages.push({
+                    role: role,
+                    content: message
+                });
+            }
+        } catch (error) {
+            logError('ResponseService', `Error inserting message into context: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
     /**
      * Updates the context and tool manifest files used by the service dynamically. The name passed in will be used to load the context and tool manifest files.
-     * The convention is that the context and manifest filles will be stored in the assets directory.
+     * The convention is that the context and manifest files will be stored in the assets directory.
      * 
-     * @param {string} contextFile - Path to the new context.md file
-     * @param {string} toolManifestFile - Path to the new toolManifest.json file
-     * @throws {Error} If file loading fails
-     */
-    /**
-     * Updates the context and tool manifest files used by the service dynamically.
-     * Loads the context and manifest from the assets directory, and updates tool definitions.
      * @param {string} contextFile - Path to the new context.md file
      * @param {string} toolManifestFile - Path to the new toolManifest.json file
      * @throws {Error} If file loading fails
@@ -300,50 +265,44 @@ class ResponseService extends EventEmitter {
         logOut('ResponseService', `Updating context with new files: ${contextFile}, ${toolManifestFile}`);
 
         const __filename = fileURLToPath(import.meta.url);
+        logOut('ResponseService', `Current file: ${__filename}`);
         const __dirname = dirname(__filename);
+        logOut('ResponseService', `Current directory: ${__dirname}`);
 
         try {
             // Load new context and tool manifest from provided file paths
             const assetsDir = path.join(__dirname, '..', '..', 'assets');
             logOut('ResponseService', `Loading context and tool manifest from: ${assetsDir}`);
+            const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
             const toolManifestPath = path.join(assetsDir, toolManifestFile);
             logOut('ResponseService', `Loading tool manifest from: ${toolManifestPath}`);
 
-            const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
-            // Load tool manifest as the new OpenAIToolDefinition structure
-            const toolManifestJSON = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: OpenAIFunctionDefinition[] };
+            const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: any[] };
 
-            // Reset conversation history and initialize with new system context
-            this.promptInputArray = [{
-                role: 'system',
-                content: context
-            }];
+            // Update instructions and reset conversation
+            this.instructions = context;
+            this.currentResponseId = null; // Reset conversation to use new context
+            this.inputMessages = []; // Reset input messages
 
             // Update tool definitions and reload tools
-            this.toolManifest = toolManifestJSON;
-
-            // load the OpenAI API function definitions from the manifest
-
-            // Convert manifest tools to OpenAI SDK FunctionTool format
-            this.toolDefinitions = toolManifestJSON.tools.map(tool => ({
-                type: "function",
-                name: tool.name,
-                parameters: tool.parameters,
-                strict: false // Default to false; adjust if your manifest supports strict
-            }));
+            this.toolManifest = toolManifest;
+            this.toolDefinitions = toolManifest.tools;
             this.loadedTools = {};
 
             logOut('ResponseService', `Reloading tools...`);
             for (const tool of this.toolDefinitions) {
-                let functionName = tool.name;
-                try {
-                    // Dynamic import for ES modules
-                    const toolsDir = path.join(__dirname, '..', 'tools');
-                    const toolModule = await import(path.join(toolsDir, `${functionName}.js`));
-                    this.loadedTools[functionName] = toolModule.default;
-                    logOut('ResponseService', `Loaded function: ${functionName}`);
-                } catch (error) {
-                    logError('ResponseService', `Error loading tool ${functionName}: ${error instanceof Error ? error.message : String(error)}`);
+                if (tool.type === 'function') {
+                    let functionName = tool.function?.name || tool.name;
+                    try {
+                        // Dynamic import for ES modules - use same path resolution as ChatCompletions version
+                        const toolsDir = path.join(__dirname, '..', 'tools');
+                        logOut('ResponseService', `Loading tool: ${functionName} from ${path.join(toolsDir, `${functionName}.js`)}`);
+                        const toolModule = await import(path.join(toolsDir, `${functionName}.js`));
+                        this.loadedTools[functionName] = toolModule.default;
+                        logOut('ResponseService', `Loaded function: ${functionName}`);
+                    } catch (error) {
+                        logError('ResponseService', `Error loading tool ${functionName}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
                 }
             }
             logOut('ResponseService', `Loaded ${Object.keys(this.loadedTools).length} tools`);
@@ -364,25 +323,173 @@ class ResponseService extends EventEmitter {
     }
 
     /**
-     * Generates a streaming response using the OpenAI Response API.
+     * Processes a stream and handles tool calls by creating follow-up responses.
+     * This is a helper method to reduce code duplication between initial and follow-up streams.
+     */
+    private async processStream(stream: any): Promise<void> {
+        let currentToolCall: ResponsesAPIToolCall | null = null;
+
+        // @ts-ignore - TypeScript doesn't recognize the async iterator on the Responses API stream yet
+        for await (const event of stream) {
+            if (this.isInterrupted) {
+                break;
+            }
+
+            const eventData = event as ResponsesAPIEvent;
+
+            // Log all event types for debugging
+            logOut('ResponseService', `Stream event type: ${eventData.type}`);
+
+            // Handle different event types from the Responses API
+            if (eventData.type === 'response.output_text.delta') {
+                // Text content streaming
+                const content = eventData.delta || '';
+                if (content) {
+                    this.emit('responseService.content', {
+                        type: "text",
+                        token: content,
+                        last: false
+                    } as ContentResponse);
+                }
+            }
+            else if (eventData.type === 'response.output_item.added') {
+                // Check if this is a function call item being added
+                logOut('ResponseService', `Output item added: ${JSON.stringify(eventData, null, 4)}`);
+
+                if (eventData.item?.type === 'function_call') {
+                    currentToolCall = {
+                        id: eventData.item.id || 'unknown',
+                        type: 'function_call',
+                        call_id: eventData.item.call_id || eventData.item.id || 'unknown',
+                        name: eventData.item.name || '',
+                        arguments: eventData.item.arguments || ''
+                    };
+                    logOut('ResponseService', `New function call started: ${currentToolCall.name}`);
+                }
+            }
+            else if (eventData.type === 'response.function_call_arguments.delta') {
+                // Function call arguments streaming - accumulate the arguments
+                logOut('ResponseService', `Function call arguments delta received: ${JSON.stringify(eventData, null, 4)}`);
+
+                if (currentToolCall && eventData.delta) {
+                    currentToolCall.arguments += eventData.delta;
+                    logOut('ResponseService', `Function arguments updated: ${currentToolCall.arguments}`);
+                }
+            }
+            else if (eventData.type === 'response.function_call_arguments.done') {
+                // Function call completed - execute it and create follow-up response
+                logOut('ResponseService', `Function call arguments completed: ${JSON.stringify(eventData, null, 4)}`);
+                logOut('ResponseService', `Current tool call state: ${JSON.stringify(currentToolCall, null, 4)}`);
+
+                if (currentToolCall) {
+                    logOut('ResponseService', `Executing tool call: ${currentToolCall.name} with args: ${currentToolCall.arguments}`);
+                    try {
+                        const toolResult = await this.executeToolCall(currentToolCall);
+                        logOut('ResponseService', `Tool call result: ${JSON.stringify(toolResult, null, 4)}`);
+
+                        if (toolResult) {
+                            logOut('ResponseService', `Tool result type: ${toolResult.toolType}`);
+                            switch (toolResult.toolType) {
+                                case "tool":
+                                    logOut('ResponseService', `Processing tool result for conversation continuation`);
+
+                                    // Add function call to input messages
+                                    this.inputMessages.push({
+                                        type: 'function_call',
+                                        id: currentToolCall.id,
+                                        call_id: currentToolCall.call_id,
+                                        name: currentToolCall.name,
+                                        arguments: currentToolCall.arguments
+                                    });
+
+                                    // Add function result to input messages
+                                    this.inputMessages.push({
+                                        type: 'function_call_output',
+                                        call_id: currentToolCall.call_id,
+                                        output: JSON.stringify(toolResult.toolData)
+                                    });
+
+                                    logOut('ResponseService', `Updated input messages length: ${this.inputMessages.length}`);
+
+                                    // Create follow-up response with tool results
+                                    logOut('ResponseService', `Creating follow-up response with tool results`);
+                                    const followUpStream = await this.openai.responses.create({
+                                        model: this.model,
+                                        input: this.inputMessages,
+                                        tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
+                                        previous_response_id: this.currentResponseId,
+                                        stream: true,
+                                        store: true
+                                    });
+
+                                    // Process the follow-up stream recursively
+                                    await this.processStream(followUpStream);
+                                    break;
+                                case "crelay":
+                                    // Emit the tool result so CR can use it
+                                    logOut('ResponseService', `Tool selected: crelay`);
+                                    this.emit('responseService.toolResult', toolResult);
+                                    break;
+                                case "error":
+                                    // Log error - API will handle the error context
+                                    logOut('ResponseService', `Tool error: ${toolResult.toolData}`);
+                                    break;
+                                default:
+                                    logOut('ResponseService', `No tool type selected. Using default processor`);
+                            }
+                        } else {
+                            logOut('ResponseService', `Tool execution returned null result`);
+                        }
+                    } catch (error) {
+                        logError('ResponseService', `Error executing tool ${currentToolCall.name}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+
+                    currentToolCall = null;
+                } else {
+                    logOut('ResponseService', `Function call completed but no currentToolCall available`);
+                }
+            }
+
+            else if (eventData.type === 'response.done') {
+                // Response completed - store the response ID for conversation continuity
+                logOut('ResponseService', `Response completed: ${JSON.stringify(eventData, null, 4)}`);
+                if (eventData.data?.id) {
+                    this.currentResponseId = eventData.data.id;
+                    logOut('ResponseService', `Response completed with ID: ${this.currentResponseId}`);
+                }
+
+                // Only emit final content marker if this is the end of the conversation
+                // (not if we're about to create a follow-up for tool results)
+                if (!currentToolCall) {
+                    this.emit('responseService.content', {
+                        type: "text",
+                        token: '',
+                        last: true
+                    } as ContentResponse);
+                }
+            }
+        }
+    }
+
+    /**
+     * Generates a streaming response using the OpenAI Responses API.
      * Handles tool calls, manages conversation history, and emits response chunks.
      * 
-     *  == Streaming and Tool Calls ==
-     * The service handles streaming responses that may include both content and tool calls:
+     * == Streaming and Tool Calls ==
+     * The Responses API handles streaming responses that may include both content and tool calls:
      *      1. Content chunks are emitted directly via 'responseService.content' events
-     *      2. Tool call chunks are accumulated until complete, as they may span multiple chunks
-     *      3. When a complete tool call is received:
-     *          - The tool is executed with the assembled arguments
-     *          - The result is added to conversation history
-     *          - A new stream is created to continue the conversation with the tool result
-     * This chunked approach ensures reliable tool execution even with complex arguments while maintaining a responsive streaming experience.
+     *      2. Tool call events are processed as they arrive
+     *      3. When tool calls are detected, they are executed immediately
+     *      4. Tool results are added to input messages and a follow-up response is created
+     * This approach ensures reliable tool execution while maintaining a responsive streaming experience.
      * 
      * == Tool Execution Flow ==
      * When the LLM suggests a tool call, the executeToolCall method processes it by:
      *      1. Retrieving the tool function from the loadedTools map using the tool name
      *      2. Parsing the JSON string arguments into an object
      *      3. Executing the tool with the parsed arguments
-     *      4. Returning the tool's response for inclusion in the conversation
+     *      4. Adding both the function call and result to input messages
+     *      5. Creating a new response with the updated input for conversation continuity
      * 
      * == Interrupt Handling ==
      * The method supports graceful interruption during response generation:
@@ -390,7 +497,6 @@ class ResponseService extends EventEmitter {
      *      2. During streaming, each event checks if isInterrupted has been set to true
      *      3. If an interruption is detected, the streaming loop breaks immediately
      *      4. This allows the system to quickly respond to user interruptions
-     *      5. The same interrupt check is applied to both initial and follow-up streams
      * This approach ensures responsive conversation flow by allowing users to interrupt
      * lengthy responses without waiting for completion.
      * 
@@ -402,208 +508,42 @@ class ResponseService extends EventEmitter {
      * @emits responseService.error
      */
     async generateResponse(role: 'user' | 'system' = 'user', prompt: string): Promise<void> {
-        let fullResponse = '';
-        let toolCallCollector: ToolCall | null = null;
         this.isInterrupted = false;
         logOut('ResponseService', `Generating response for ${role}: ${prompt}`);
 
         try {
-            // Add the prompt message to history
-            this.promptInputArray.push({ role, content: prompt });
-
-            const stream = await this.openai.responses.create({
-                model: this.model,
-                input: this.promptInputArray,
-                tools: this.toolDefinitions,
-                stream: true
+            // Add the new message to input messages
+            this.inputMessages.push({
+                role: role === 'system' ? 'user' : role, // Responses API doesn't accept 'system' in input
+                content: role === 'system' ? `System: ${prompt}` : prompt
             });
 
-            logOut('ResponseService', `Stream created`);
+            const tools = this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined;
+            logOut('ResponseService', `generateResponse tools: ${JSON.stringify(tools, null, 4)}`);
 
-            for await (const event of stream) {
-                if (this.isInterrupted) {
-                    break;
-                }
+            // Create the response with streaming enabled
+            const createParams: any = {
+                model: this.model,
+                input: this.inputMessages,
+                stream: true,
+                store: true, // Enable conversation storage
+                tools: tools
+            };
 
-                // Handle different event types based on the semantic events structure
-                if (event.type === 'response.created') {
-                    logOut('ResponseService', `Response created with ID: ${(event as OpenAI.Responses.ResponseCreatedEvent).response.id}`);
-                }
-                else if (event.type === 'response.output_text.delta') {
-                    // Handle text output
-                    const textEvent = event as OpenAI.Responses.ResponseTextDeltaEvent;
-                    fullResponse += textEvent.delta;
-                    this.emit('responseService.content', {
-                        type: "text",
-                        token: textEvent.delta,
-                        last: false
-                    } as ContentResponse);
-                }
-                else if (event.type === 'response.function_call_arguments.delta') {
-                    // Accumulate function call arguments
-                    const argsEvent = event as OpenAI.Responses.ResponseFunctionCallArgumentsDeltaEvent;
-
-                    // Initialize collector if this is the first function call chunk
-                    if (!toolCallCollector) {
-                        toolCallCollector = {
-                            id: argsEvent.item_id,
-                            type: "function",
-                            function: {
-                                name: '', // Will be filled in later
-                                arguments: ''
-                            }
-                        };
-                    }
-
-                    // Accumulate arguments
-                    if (toolCallCollector) {
-                        toolCallCollector.function.arguments += argsEvent.delta;
-                    }
-                }
-                else if (event.type === 'response.function_call_arguments.done') {
-                    // Function call arguments are complete, execute the tool
-                    const doneEvent = event as OpenAI.Responses.ResponseFunctionCallArgumentsDoneEvent;
-
-                    if (toolCallCollector) {
-                        // Update with the complete arguments
-                        toolCallCollector.function.arguments = doneEvent.arguments;
-
-                        // At this point we need to get the function name
-                        // Since we don't have a direct event for it, we'll use the existing name or try to parse it
-                        // This is a simplification - in a real implementation, you might need to track this differently
-                        if (!toolCallCollector.function.name) {
-                            try {
-                                // Try to extract function name from arguments if possible
-                                const argsObj = JSON.parse(toolCallCollector.function.arguments);
-                                if (argsObj && argsObj._function_name) {
-                                    toolCallCollector.function.name = argsObj._function_name;
-                                }
-                            } catch (e) {
-                                // If parsing fails, we'll need to handle this case
-                                logError('ResponseService', `Failed to parse function arguments: ${e}`);
-                            }
-                        }
-
-                        const toolCallObj: ToolCall = {
-                            id: toolCallCollector.id,
-                            type: "function",
-                            function: {
-                                name: toolCallCollector.function.name,
-                                arguments: toolCallCollector.function.arguments
-                            }
-                        };
-
-                        let toolResult: ToolResult | null = null;
-                        try {
-                            let calledTool = this.loadedTools[toolCallObj.function.name];
-                            let calledToolArgs = JSON.parse(toolCallObj.function.arguments);
-
-                            toolResult = await calledTool(calledToolArgs);
-                            logOut('ResponseService', `Conversational tool call result: ${JSON.stringify(toolResult, null, 4)}`);
-
-                            // Add assistant response and tool result to history
-                            this.promptInputArray.push({
-                                role: "assistant",
-                                content: fullResponse
-                                // Note: tool_calls is not included here as it's not part of the new API structure
-                            });
-
-                            /**
-                             * There are different types of responses that can come back from the tools to indicate what needs to be done:
-                             * 
-                             * - tool: normal tool call that returns a result that is then consumed by the LLM to produce conversational content.
-                             * - error: error message also consumed by the LLM to produce conversational content.
-                             * - crelay: Conversation Relay specific response format that is not sent back as conversational content
-                             * - llm: LLM Controller specific response format that is not sent back as conversational content, but used to change the LLM.
-                             * {
-                             *       tool: "tool-type",
-                             *       response: "response text",
-                             * } 
-                             * 
-                             */
-                            if (toolResult) {
-                                switch (toolResult.toolType) {
-                                    case "tool":
-                                        // Add the tool result to the conversation history
-                                        logOut('ResponseService', `Tool selected data: ${JSON.stringify(toolResult)}`);
-                                        this.promptInputArray.push({
-                                            role: "assistant",
-                                            content: JSON.stringify(toolResult.toolData)
-                                            // Note: tool_call_id is not included as it's not part of the new API structure
-                                        });
-                                        break;
-                                    case "crelay":
-                                        // Emit the tool result so CR can use it
-                                        logOut('ResponseService', `Tool selected: crelay`);
-                                        this.emit('responseService.toolResult', toolResult);
-                                        break;
-                                    case "error":
-                                        // Add the error to the conversation history
-                                        logOut('ResponseService', `Tool selected: error`);
-                                        this.promptInputArray.push({
-                                            role: "system",
-                                            content: toolResult.toolData
-                                        });
-                                        break;
-                                    default:
-                                        logOut('ResponseService', `No tool type selected. Using default processor`);
-                                }
-                            }
-
-                            // Continue the conversation with tool results
-                            const followUpResponse = await this.openai.responses.create({
-                                model: this.model,
-                                input: this.promptInputArray,
-                                stream: true
-                            });
-
-                            for await (const followUpEvent of followUpResponse) {
-                                if (this.isInterrupted) {
-                                    break;
-                                }
-
-                                // Handle text output from follow-up response
-                                if (followUpEvent.type === 'response.output_text.delta') {
-                                    const textEvent = followUpEvent as OpenAI.Responses.ResponseTextDeltaEvent;
-                                    fullResponse += textEvent.delta;
-                                    this.emit('responseService.content', {
-                                        type: "text",
-                                        token: textEvent.delta,
-                                        last: false
-                                    } as ContentResponse);
-                                }
-                            }
-                        } catch (error) {
-                            logError('ResponseService', `GenerateResponse, Error executing tool ${toolCallObj.function.name}: ${error instanceof Error ? error.message : String(error)}`);
-                        }
-                    }
-                }
-                else if (event.type === 'response.completed') {
-                    // Response is complete
-                    logOut('ResponseService', `Response completed`);
-
-                    // Add final assistant response to history if no tool was called
-                    if (!toolCallCollector) {
-                        this.promptInputArray.push({
-                            role: "assistant",
-                            content: fullResponse
-                        });
-                    }
-
-                    // Emit the final content with last=true
-                    this.emit('responseService.content', {
-                        type: "text",
-                        token: '',
-                        last: true
-                    } as ContentResponse);
-                }
-                else if (event.type === 'error') {
-                    // Handle error events
-                    const errorEvent = event as OpenAI.Responses.ResponseErrorEvent;
-                    logError('ResponseService', `Error in stream: ${errorEvent.message}`);
-                    this.emit('responseService.error', errorEvent);
-                }
+            // If we have an existing conversation, continue it
+            if (this.currentResponseId) {
+                createParams.previous_response_id = this.currentResponseId;
+            } else {
+                // Only add instructions on new conversations
+                createParams.instructions = this.instructions;
             }
+
+            const stream = await this.openai.responses.create(createParams);
+
+            logOut('ResponseService', `Response stream created`);
+
+            // Process the stream using the helper method
+            await this.processStream(stream);
 
         } catch (error) {
             this.emit('responseService.error', error);
