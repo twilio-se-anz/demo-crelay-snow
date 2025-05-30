@@ -1,4 +1,4 @@
-import { logOut, logError } from '../utils/logger.js';
+import { logOut } from '../utils/logger.js';
 
 /**
  * Interface for the function arguments
@@ -9,35 +9,56 @@ interface EndCallFunctionArguments {
 }
 
 /**
- * Interface for the response object
+ * Interface for the tool event (passed by ResponseService)
  */
-interface EndCallResponse {
-    toolType: string;
-    toolData: {
-        type: string;
-        handoffData: string;
-    };
+interface ToolEvent {
+    emit: (eventType: string, data: any) => void;
+    log: (message: string) => void;
+    logError: (message: string) => void;
 }
 
 /**
- * This is a CR specific tool type. It CR specific messages sent back via the Websocket.
+ * Interface for the response object - simple response for conversation
+ */
+interface EndCallResponse {
+    success: boolean;
+    message: string;
+    summary: string;
+}
+
+/**
+ * Ends the call with a summary and triggers call termination via WebSocket
  * 
  * @param functionArguments - The arguments for the end call function
- * @returns The response object for ending the call
+ * @param toolEvent - Tool event for emitting events (provided by ResponseService)
+ * @returns Simple response for conversation context
  */
-export default function (functionArguments: EndCallFunctionArguments): EndCallResponse {
+export default function (functionArguments: EndCallFunctionArguments, toolEvent?: ToolEvent): EndCallResponse {
     logOut('EndCall', `End call function called with arguments: ${JSON.stringify(functionArguments)}`);
-    const response: EndCallResponse = {
-        toolType: "crelay",
-        toolData: {
+
+    // If toolEvent is available, emit the end call event for WebSocket transmission
+    if (toolEvent) {
+        const endCallData = {
             type: "end",
-            handoffData: JSON.stringify({   // TODO: Why does this have to be stringified?
+            handoffData: JSON.stringify({
                 reasonCode: "end-call",
                 reason: "Ending the call",
                 conversationSummary: functionArguments.summary,
             })
-        }
+        };
+
+        // Emit using "crelay" type so ConversationRelay handles it
+        toolEvent.emit('crelay', endCallData);
+        toolEvent.log(`Emitted end call event: ${JSON.stringify(endCallData)}`);
+    }
+
+    // Return simple response for conversation context
+    const response: EndCallResponse = {
+        success: true,
+        message: `Call ended successfully`,
+        summary: functionArguments.summary
     };
-    logOut('EndCall', `Ending the call with endResponseContent: ${JSON.stringify(response, null, 4)}`);
+
+    logOut('EndCall', `End call response: ${JSON.stringify(response)}`);
     return response;
 }

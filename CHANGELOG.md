@@ -1,5 +1,59 @@
 # Changelog
 
+## Release v3.2
+
+This release introduces a significant architectural improvement with the migration from the toolType-based system to a ToolEvent-based system, providing enhanced flexibility and cleaner separation of concerns for tool execution.
+
+### Migration to ToolEvent System
+
+The system has been updated to use a ToolEvent-based architecture instead of the previous toolType system, bringing several key benefits:
+
+- **Enhanced Tool Isolation**: Tools now receive a ToolEvent object that provides controlled access to emit events, logging, and error handling
+- **Improved Event Management**: Clear separation between tool execution and event emission through the ToolEvent interface
+- **Better Error Handling**: Tools can now emit errors and log messages through the ToolEvent system
+- **Cleaner Architecture**: Removal of complex toolType switching logic in favor of event-driven communication
+
+### Key Changes
+
+- **ToolEvent Interface**: Tools now receive a ToolEvent object with `emit()`, `log()`, and `logError()` methods
+- **Event-Driven Communication**: Tools emit events using `toolEvent.emit(eventType, data)` instead of returning toolType objects
+- **Simplified Tool Logic**: Tools focus on their core functionality while delegating communication to the ToolEvent system
+- **Enhanced Logging**: Built-in logging capabilities through the ToolEvent interface
+
+### Technical Improvements
+
+- **ResponseService Enhancement**: The `createToolEvent()` method provides tools with a controlled interface for event emission
+- **Event Processing**: Tools emit events that are processed by the ResponseService and forwarded to ConversationRelayService
+- **Backward Compatibility**: The system maintains compatibility while providing a more robust foundation for tool development
+- **Type Safety**: Enhanced TypeScript interfaces for ToolEvent and tool responses
+
+### Tool Implementation Changes
+
+Tools now follow this pattern:
+
+```typescript
+export default function (functionArguments: ToolArguments, toolEvent?: ToolEvent): ToolResponse {
+    // Tool logic here
+    
+    if (toolEvent) {
+        // Emit events for WebSocket transmission
+        toolEvent.emit('crelay', {
+            type: "action",
+            data: actionData
+        });
+        toolEvent.log(`Action completed: ${JSON.stringify(actionData)}`);
+    }
+    
+    // Return simple response for conversation context
+    return {
+        success: true,
+        message: "Action completed successfully"
+    };
+}
+```
+
+This migration provides a more maintainable and extensible architecture for tool development while maintaining full backward compatibility.
+
 ## Release v3.1
 
 This release introduces a significant architectural improvement with the migration from OpenAI's ChatCompletion API to the Response API, providing enhanced flexibility and future-proofing for LLM integrations.

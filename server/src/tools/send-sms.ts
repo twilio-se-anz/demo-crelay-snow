@@ -1,8 +1,7 @@
 /**
- * Send SMS function. This is an example of a NON-CR type tool type and will not be sent back via CR. 
- * It also shows the toolType "error" in the response.
- * Although the actual SMS API code could be inserted directly here, we are using the common TwilioService instead, to send the SMS to keep the code contained.
- * 
+ * Send SMS function - simplified to return standard responses without tool types
+ * This tool doesn't need to emit events since it's a standard operation that just
+ * returns results for the conversation context.
  */
 import { logOut, logError } from '../utils/logger.js';
 import { TwilioService } from '../services/TwilioService.js';
@@ -17,34 +16,37 @@ interface SendSMSFunctionArguments {
 }
 
 /**
- * Interface for the success response object
+ * Interface for the tool event (passed by ResponseService)
  */
-interface SendSMSSuccessResponse {
-    toolType: "tool";
-    toolData: string;
+interface ToolEvent {
+    emit: (eventType: string, data: any) => void;
+    log: (message: string) => void;
+    logError: (message: string) => void;
 }
 
 /**
- * Interface for the error response object
+ * Interface for the response object - simplified
  */
-interface SendSMSErrorResponse {
-    toolType: "error";
-    toolData: string;
+interface SendSMSResponse {
+    success: boolean;
+    message: string;
+    recipient?: string;
 }
-
-/**
- * Type for the combined response types
- */
-type SendSMSResponse = SendSMSSuccessResponse | SendSMSErrorResponse;
 
 /**
  * Sends an SMS message using the Twilio service
+ * Now returns a simple response that gets inserted into conversation context
  * 
  * @param functionArguments - The arguments for the send SMS function
- * @returns A response object indicating success or failure
+ * @param toolEvent - Tool event for logging (provided by ResponseService)
+ * @returns A simple response object for conversation context
  */
-export default async function (functionArguments: SendSMSFunctionArguments): Promise<SendSMSResponse> {
-    logOut('SendSMS', `Send SMS function called with arguments: ${JSON.stringify(functionArguments)}`);
+export default async function (functionArguments: SendSMSFunctionArguments, toolEvent?: ToolEvent): Promise<SendSMSResponse> {
+    const log = toolEvent?.log || ((msg: string) => logOut('SendSMS', msg));
+    const logError_ = toolEvent?.logError || ((msg: string) => logError('SendSMS', msg));
+
+    log(`Send SMS function called with arguments: ${JSON.stringify(functionArguments)}`);
+
     const twilioService = new TwilioService();
 
     try {
@@ -52,26 +54,29 @@ export default async function (functionArguments: SendSMSFunctionArguments): Pro
         const result = await twilioService.sendSMS(functionArguments.to, functionArguments.message);
 
         if (!result) {
-            logError('SendSMS', `Failed to send SMS to ${functionArguments.to}`);
-            const response: SendSMSErrorResponse = {
-                toolType: "error",
-                toolData: `SMS send failed to the number`
+            logError_(`Failed to send SMS to ${functionArguments.to}`);
+            return {
+                success: false,
+                message: `Failed to send SMS to ${functionArguments.to}`
             };
-            return response;
         }
 
-        const response: SendSMSSuccessResponse = {
-            toolType: "tool",
-            toolData: `SMS sent to the number successfully to ${functionArguments.to}`
+        const response: SendSMSResponse = {
+            success: true,
+            message: `SMS sent successfully`,
+            recipient: functionArguments.to
         };
-        logOut('SendSMS', `Sent SMS: ${JSON.stringify(response, null, 4)}`);
+
+        log(`SMS sent successfully: ${JSON.stringify(response)}`);
         return response;
+
     } catch (error) {
-        logError('SendSMS', `Exception when sending SMS: ${error instanceof Error ? error.message : String(error)}`);
-        const response: SendSMSErrorResponse = {
-            toolType: "error",
-            toolData: `SMS send failed due to an error: ${error instanceof Error ? error.message : String(error)}`
+        const errorMessage = `SMS send failed: ${error instanceof Error ? error.message : String(error)}`;
+        logError_(errorMessage);
+
+        return {
+            success: false,
+            message: errorMessage
         };
-        return response;
     }
 }

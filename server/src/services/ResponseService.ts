@@ -75,18 +75,26 @@ interface ContentResponse {
     last: boolean;
 }
 
+// ToolEvent interface for tool execution context. This is used by tools to emit events
+interface ToolEvent {
+    emit: (eventType: string, data: any) => void;
+    log: (message: string) => void;
+    logError: (message: string) => void;
+}
+
 /**
  * Interface for tool result
  */
 interface ToolResult {
-    toolType: string;
-    toolData: any;
+    success: boolean;
+    message: string;
+    [key: string]: any; // Allows additional properties like digits, recipient, summary, etc.
 }
 
 /**
  * Type for loaded tool function
  */
-type ToolFunction = (args: any) => Promise<ToolResult> | ToolResult;
+type ToolFunction = (args: any, toolEvent?: ToolEvent) => Promise<ToolResult> | ToolResult;
 
 /**
  * Interface for tool call from streaming events
@@ -152,17 +160,37 @@ class ResponseService extends EventEmitter {
     }
 
     /**
-     * Executes a tool call based on function calling feature.
-     * 
-     * @param {ResponsesAPIToolCall} tool - Tool call object
-     * @returns {Promise<ToolResult|null>} Tool execution result or null if execution fails
+     * Creates a ToolEvent object that tools can use to emit events
      */
+    private createToolEvent(): ToolEvent {
+        return {
+            emit: (eventType: string, data: any) => {
+                this.emit('responseService.toolResult', {
+                    toolType: eventType,
+                    toolData: data
+                });
+            },
+            log: (message: string) => logOut('Tool', message),
+            logError: (message: string) => logError('Tool', message)
+        };
+    }
+
+    /**
+    * Executes a tool call with proper type safety
+    * 
+    * @param {ResponsesAPIToolCall} tool - Tool call object
+    * @returns {Promise<ToolResult|null>} Tool execution result or null if execution fails
+    */
     async executeToolCall(tool: ResponsesAPIToolCall): Promise<ToolResult | null> {
         try {
-            let calledTool = this.loadedTools[tool.name];
-            let calledToolArgs = JSON.parse(tool.arguments);
-            // Now run the loaded tool
-            let toolResponse = await calledTool(calledToolArgs);
+            const calledTool: ToolFunction = this.loadedTools[tool.name];
+            const calledToolArgs = JSON.parse(tool.arguments);
+
+            // Create ToolEvent for the tool
+            const toolEvent = this.createToolEvent();
+
+            // Call the tool with both arguments and toolEvent
+            const toolResponse: ToolResult = await calledTool(calledToolArgs, toolEvent);
 
             return toolResponse;
         } catch (error) {
@@ -368,52 +396,38 @@ class ResponseService extends EventEmitter {
                     // Function call completed - execute it and create follow-up response
                     if (currentToolCall) {
                         try {
-                            const toolResult = await this.executeToolCall(currentToolCall);
+                            const toolResult: ToolResult | null = await this.executeToolCall(currentToolCall);
 
-                            if (toolResult) {
-                                logOut('ResponseService', `Tool result type: ${toolResult.toolType}`);
-                                switch (toolResult.toolType) {
-                                    case "tool":
-                                        // Add function call to input messages
-                                        this.inputMessages.push({
-                                            type: 'function_call',
-                                            id: currentToolCall.id,
-                                            call_id: currentToolCall.call_id,
-                                            name: currentToolCall.name,
-                                            arguments: currentToolCall.arguments
-                                        });
+                            if (toolResult !== null) {
+                                // Always add function call and result to conversation
+                                this.inputMessages.push({
+                                    type: 'function_call',
+                                    id: currentToolCall.id,
+                                    call_id: currentToolCall.call_id,
+                                    name: currentToolCall.name,
+                                    arguments: currentToolCall.arguments
+                                });
 
-                                        // Add function result to input messages
-                                        this.inputMessages.push({
-                                            type: 'function_call_output',
-                                            call_id: currentToolCall.call_id,
-                                            output: JSON.stringify(toolResult.toolData)
-                                        });
+                                // Add function result to input messages
+                                this.inputMessages.push({
+                                    type: 'function_call_output',
+                                    call_id: currentToolCall.call_id,
+                                    output: JSON.stringify(toolResult)
+                                });
 
-                                        // Create follow-up response with tool results
-                                        const followUpStream = await this.openai.responses.create({
-                                            model: this.model,
-                                            input: this.inputMessages,
-                                            tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
-                                            previous_response_id: this.currentResponseId,
-                                            stream: true,
-                                            store: true
-                                        });
+                                // Create follow-up response with tool results
+                                const followUpStream = await this.openai.responses.create({
+                                    model: this.model,
+                                    input: this.inputMessages,
+                                    tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
+                                    previous_response_id: this.currentResponseId,
+                                    stream: true,
+                                    store: true
+                                });
 
-                                        // Process the follow-up stream recursively
-                                        await this.processStream(followUpStream);
-                                        break;
-                                    case "crelay":
-                                        // Emit the tool result so CR can use it
-                                        this.emit('responseService.toolResult', toolResult);
-                                        break;
-                                    case "error":
-                                        // Log error - API will handle the error context
-                                        logError('ResponseService', `Tool error: ${toolResult.toolData}`);
-                                        break;
-                                    default:
-                                        logError('ResponseService', `No tool type selected`);
-                                }
+                                // Process the follow-up stream recursively
+                                await this.processStream(followUpStream);
+
                             } else {
                                 logError('ResponseService', `Tool execution returned null result`);
                             }

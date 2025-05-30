@@ -2,9 +2,31 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v3.1
+## Release v3.2
 
-This release introduces a significant architectural improvement with the migration from OpenAI's ChatCompletion API to the Response API, providing enhanced flexibility and future-proofing for LLM integrations.
+This release introduces a significant architectural improvement with the migration from the toolType-based system to a ToolEvent-based system, providing enhanced flexibility and cleaner separation of concerns for tool execution.
+
+### Migration to ToolEvent System
+
+The system has been updated to use a ToolEvent-based architecture instead of the previous toolType system, bringing several key benefits:
+
+- **Enhanced Tool Isolation**: Tools now receive a ToolEvent object that provides controlled access to emit events, logging, and error handling
+- **Improved Event Management**: Clear separation between tool execution and event emission through the ToolEvent interface
+- **Better Error Handling**: Tools can now emit errors and log messages through the ToolEvent system
+- **Cleaner Architecture**: Removal of complex toolType switching logic in favor of event-driven communication
+
+### Key Changes
+
+- **ToolEvent Interface**: Tools now receive a ToolEvent object with `emit()`, `log()`, and `logError()` methods
+- **Event-Driven Communication**: Tools emit events using `toolEvent.emit(eventType, data)` instead of returning toolType objects
+- **Simplified Tool Logic**: Tools focus on their core functionality while delegating communication to the ToolEvent system
+- **Enhanced Logging**: Built-in logging capabilities through the ToolEvent interface
+
+This migration maintains full backward compatibility while providing a more robust foundation for future enhancements. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
+
+## Previous Release - v3.1
+
+This release introduced a significant architectural improvement with the migration from OpenAI's ChatCompletion API to the Response API, providing enhanced flexibility and future-proofing for LLM integrations.
 
 ### Migration to Response API
 
@@ -274,24 +296,36 @@ Available tools:
    - Used for verification codes or follow-up information
    - Returns a "tool" type response for LLM processing or "error" type if sending fails
 
-Each tool now returns a structured response with `toolType` and `toolData` properties that determine how the response is processed:
+Each tool now uses the ToolEvent system to emit events and return simple responses for conversation context:
 
 ```typescript
-{
-  toolType: "crelay", // Tool type identifier
-  toolData: {         // Tool-specific data
-    type: "end",
-    handoffData: {...}
-  }
+// Tools receive a ToolEvent object for event emission
+export default function (functionArguments: ToolArguments, toolEvent?: ToolEvent): ToolResponse {
+    // Tool logic here
+    
+    if (toolEvent) {
+        // Emit events for WebSocket transmission using the ToolEvent interface
+        toolEvent.emit('crelay', {
+            type: "action",
+            data: actionData
+        });
+        toolEvent.log(`Action completed: ${JSON.stringify(actionData)}`);
+    }
+    
+    // Return simple response for conversation context
+    return {
+        success: true,
+        message: "Action completed successfully"
+    };
 }
 ```
 
-The ResponseService uses this structure to decide whether to:
-- Add the response to the conversation history for LLM processing ("tool" type)
-- Emit the response directly to the WebSocket for Conversation Relay actions ("crelay" type)
-- Add an error message to the conversation history ("error" type)
+The ResponseService creates ToolEvent objects that provide tools with controlled access to:
+- **Event Emission**: `toolEvent.emit(eventType, data)` for sending events to ConversationRelayService
+- **Logging**: `toolEvent.log(message)` for standard logging
+- **Error Logging**: `toolEvent.logError(message)` for error reporting
 
-The OpenAI service loads these tools during initialization and makes them available for use in conversations through OpenAI's function calling feature.
+The ResponseService loads these tools during initialization and makes them available for use in conversations through OpenAI's function calling feature.
 
 ## Environment Configuration
 
@@ -498,28 +532,28 @@ Error:
 
 ### Server Tools
 
-The server includes several built-in tools for call management, each implementing the new toolType/toolData pattern:
+The server includes several built-in tools for call management, each implementing the new ToolEvent-based system:
 
-1. `end-call` (toolType: "crelay")
+1. `end-call`
    - Gracefully terminates the current call
    - Used for normal call completion or error scenarios
-   - Returns a direct Conversation Relay message
+   - Uses `toolEvent.emit('crelay', endCallData)` to send termination events directly to WebSocket
 
-2. `live-agent-handoff` (toolType: "crelay")
+2. `live-agent-handoff`
    - Transfers the call to a human agent
    - Handles escalation scenarios
-   - Returns a direct Conversation Relay message
+   - Uses `toolEvent.emit('crelay', handoffData)` to send handoff events directly to WebSocket
 
-3. `send-dtmf` (toolType: "crelay")
+3. `send-dtmf`
    - Sends DTMF tones during the call
    - Useful for automated menu navigation
-   - Returns a direct Conversation Relay message
+   - Uses `toolEvent.emit('crelay', dtmfData)` to send DTMF events directly to WebSocket
 
-4. `send-sms` (toolType: "tool" or "error")
+4. `send-sms`
    - Sends SMS messages during the call
    - Used for verification codes or follow-up information
-   - Returns a standard tool response for LLM processing
-   - Returns an error response if SMS sending fails
+   - Returns a simple response for LLM conversation context
+   - Uses standard logging through the ToolEvent interface
 
 ### Enhanced Tool Handling System
 

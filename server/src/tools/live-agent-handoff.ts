@@ -1,4 +1,4 @@
-import { logOut, logError } from '../utils/logger.js';
+import { logOut } from '../utils/logger.js';
 
 /**
  * Interface for the function arguments
@@ -9,34 +9,55 @@ interface LiveAgentHandoffFunctionArguments {
 }
 
 /**
- * Interface for the response object
+ * Interface for the tool event (passed by ResponseService)
  */
-interface LiveAgentHandoffResponse {
-    toolType: string;
-    toolData: {
-        type: string;
-        handoffData: string;
-    };
+interface ToolEvent {
+    emit: (eventType: string, data: any) => void;
+    log: (message: string) => void;
+    logError: (message: string) => void;
 }
 
 /**
- * This is a CR specific tool type. It CR specific messages sent back via the Websocket.
+ * Interface for the response object - simple response for conversation
+ */
+interface LiveAgentHandoffResponse {
+    success: boolean;
+    message: string;
+    summary: string;
+}
+
+/**
+ * Initiates handoff to a live agent and triggers call transfer via WebSocket
  * 
  * @param functionArguments - The arguments for the live agent handoff function
- * @returns The response object for handing off to a live agent
+ * @param toolEvent - Tool event for emitting events (provided by ResponseService)
+ * @returns Simple response for conversation context
  */
-export default function (functionArguments: LiveAgentHandoffFunctionArguments): LiveAgentHandoffResponse {
+export default function (functionArguments: LiveAgentHandoffFunctionArguments, toolEvent?: ToolEvent): LiveAgentHandoffResponse {
     logOut('LiveAgentHandoff', `LiveAgentHandoff function called with arguments: ${JSON.stringify(functionArguments)}`);
-    const response: LiveAgentHandoffResponse = {
-        toolType: "crelay",
-        toolData: {
+
+    // If toolEvent is available, emit the handoff event for WebSocket transmission
+    if (toolEvent) {
+        const handoffData = {
             type: "end",
-            handoffData: JSON.stringify({   // TODO: Why does this have to be stringified?
+            handoffData: JSON.stringify({
                 reasonCode: "live-agent-handoff",
                 reason: functionArguments.summary
             })
-        }
+        };
+
+        // Emit using "crelay" type so ConversationRelay handles it
+        toolEvent.emit('crelay', handoffData);
+        toolEvent.log(`Emitted live agent handoff event: ${JSON.stringify(handoffData)}`);
+    }
+
+    // Return simple response for conversation context
+    const response: LiveAgentHandoffResponse = {
+        success: true,
+        message: `Live agent handoff initiated`,
+        summary: functionArguments.summary
     };
-    logOut('LiveAgentHandoff', `Transfer to agent response: ${JSON.stringify(response, null, 4)}`);
+
+    logOut('LiveAgentHandoff', `Live agent handoff response: ${JSON.stringify(response)}`);
     return response;
 }
