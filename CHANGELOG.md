@@ -1,5 +1,42 @@
 # Changelog
 
+## Release v3.3
+
+This release enhances type safety and API alignment by migrating from custom streaming event interfaces to OpenAI's native typed streaming events, providing better maintainability and future-proofing.
+
+### Migration to OpenAI Native Streaming Events
+
+The system has been updated to use OpenAI's native `ResponseStreamEvent` types instead of custom `ResponseAPIEvent` interfaces, bringing several key benefits:
+
+- **Enhanced Type Safety**: Full TypeScript support with OpenAI's official event types
+- **Better API Alignment**: Direct use of OpenAI's streaming event specifications
+- **Improved Maintainability**: Reduced custom code in favor of official SDK types
+- **Future-Proof Architecture**: Automatic compatibility with OpenAI's evolving streaming API
+
+### Key Changes
+
+- **Native Event Types**: Replaced custom `ResponsesAPIEvent` interface with OpenAI's `ResponseStreamEvent` union type
+- **Proper Event Handling**: Updated event processing to use correct OpenAI event names (e.g., `response.completed` instead of `response.done`)
+- **Type-Safe Streaming**: Full TypeScript support for all streaming events including `ResponseCreatedEvent`, `ResponseTextDeltaEvent`, `ResponseCompletedEvent`, etc.
+- **Enhanced Error Detection**: Better error handling through properly typed event structures
+
+### Technical Details
+
+The migration involved:
+- Importing `ResponseStreamEvent` from `openai/resources/responses/responses.mjs`
+- Removing the custom `ResponsesAPIEvent` interface
+- Updating event type checking to use OpenAI's official event type names
+- Ensuring proper type safety throughout the streaming pipeline
+
+### Benefits
+
+- **Reduced Maintenance**: No need to maintain custom event interfaces that duplicate OpenAI's functionality
+- **Better Documentation**: Direct access to OpenAI's official type documentation
+- **Automatic Updates**: Future OpenAI SDK updates will automatically provide new event types
+- **Type Safety**: Compile-time checking ensures correct event handling
+
+This change aligns the codebase with OpenAI's official streaming API documentation and provides better long-term maintainability while maintaining full backward compatibility.
+
 ## Release v3.2
 
 This release introduces a significant architectural improvement with the migration from the toolType-based system to a ToolEvent-based system, providing enhanced flexibility and cleaner separation of concerns for tool execution.

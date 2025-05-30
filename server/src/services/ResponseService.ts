@@ -60,7 +60,7 @@ import { dirname } from 'path';
 // Import proper OpenAI types 
 // Note: ResponseInput is not yet exported in main OpenAI namespace (see issue #1378)
 // Using direct import as recommended workaround until it's properly exported
-import type { ResponseInput } from 'openai/resources/responses/responses.mjs';
+import type { ResponseInput, ResponseStreamEvent } from 'openai/resources/responses/responses.mjs';
 
 import { logOut, logError } from '../utils/logger.js';
 
@@ -107,20 +107,6 @@ interface ResponsesAPIToolCall {
     arguments: string;
 }
 
-/**
- * Interface for streaming events from Responses API
- */
-interface ResponsesAPIEvent {
-    type: string;
-    delta?: string;
-    data?: any;
-    id?: string;
-    response_id?: string;
-    item_id?: string;
-    output_index?: number;
-    item?: any;
-    arguments?: string;
-}
 
 class ResponseService extends EventEmitter {
     protected openai: OpenAI;
@@ -357,7 +343,7 @@ class ResponseService extends EventEmitter {
                 break;
             }
 
-            const eventData = event as ResponsesAPIEvent;
+            const eventData = event as ResponseStreamEvent;
 
             // Handle different event types from the Responses API
             switch (eventData.type) {
@@ -441,10 +427,10 @@ class ResponseService extends EventEmitter {
                     }
                     break;
 
-                case 'response.done':
+                case 'response.completed':
                     // Response completed - store the response ID for conversation continuity
-                    if (eventData.data?.id) {
-                        this.currentResponseId = eventData.data.id;
+                    if ('response' in eventData && eventData.response?.id) {
+                        this.currentResponseId = eventData.response.id;
                     }
 
                     // Only emit final content marker if this is the end of the conversation

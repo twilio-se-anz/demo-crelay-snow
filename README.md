@@ -2,63 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v3.2
+## Release v3.3
 
-This release introduces a significant architectural improvement with the migration from the toolType-based system to a ToolEvent-based system, providing enhanced flexibility and cleaner separation of concerns for tool execution.
-
-### Migration to ToolEvent System
-
-The system has been updated to use a ToolEvent-based architecture instead of the previous toolType system, bringing several key benefits:
-
-- **Enhanced Tool Isolation**: Tools now receive a ToolEvent object that provides controlled access to emit events, logging, and error handling
-- **Improved Event Management**: Clear separation between tool execution and event emission through the ToolEvent interface
-- **Better Error Handling**: Tools can now emit errors and log messages through the ToolEvent system
-- **Cleaner Architecture**: Removal of complex toolType switching logic in favor of event-driven communication
-
-### Key Changes
-
-- **ToolEvent Interface**: Tools now receive a ToolEvent object with `emit()`, `log()`, and `logError()` methods
-- **Event-Driven Communication**: Tools emit events using `toolEvent.emit(eventType, data)` instead of returning toolType objects
-- **Simplified Tool Logic**: Tools focus on their core functionality while delegating communication to the ToolEvent system
-- **Enhanced Logging**: Built-in logging capabilities through the ToolEvent interface
-
-This migration maintains full backward compatibility while providing a more robust foundation for future enhancements. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
-
-## Previous Release - v3.1
-
-This release introduced a significant architectural improvement with the migration from OpenAI's ChatCompletion API to the Response API, providing enhanced flexibility and future-proofing for LLM integrations.
-
-### Migration to Response API
-
-The system has been updated to use OpenAI's Response API instead of the ChatCompletion API, bringing several key benefits:
-
-- **Enhanced Robustness**: The Response API provides more reliable streaming capabilities and better error handling
-- **Improved Flexibility**: Support for additional response formats and processing options
-- **Future-Proof Architecture**: Better alignment with OpenAI's evolving API ecosystem
-- **Multi-Provider Support**: Foundation for easier integration of additional LLM providers beyond OpenAI
-
-### Key Changes
-
-- **ResponseService Architecture**: The OpenAIService has been enhanced with a new ResponseService base class that abstracts LLM interactions
-- **Unified Interface**: All LLM providers now implement a consistent interface through the ResponseService pattern
-- **Enhanced Error Handling**: Improved error detection and recovery mechanisms
-- **Streaming Optimization**: Better handling of streaming responses with interrupt capabilities
-
-This migration maintains full backward compatibility while providing a more robust foundation for future enhancements. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
-
-1. There is a main Server that has two functions:
-   - It is a WebSocket server - The Websocket server maintains a connection and relays messages between the two parties. It is the core of the conversation relay system.
-   - It is a API endpoint - The endpoints are used to execute code for various components, such as connecting Conversation Relay for example.
-2. There is a Services collection that ensures we isolate the functionality of Conversation Relay, OpenAI and Twilio for example. The intention is to ensure we have no knowledge "bleed" between the different components.
-   **_Conversation Relay_** - This is the core of the conversation relay system. The key part is understanding the different message types, specifically "setup" and "prompt". Event handling is key, since only this service can understand when to send which messages back to the websocket and back to Twilio. An example is "sendDigits" where this service will only emit the event when it directly needs to send this back via the websocket, otherwise it lets the LLM handle it.
-
-   **_OpenAI Service_** - This service is used to interact with the OpenAI API. It is a typical LLM implementation where it sends a prompt and receives a response, along with tools to manage the conversation flow. Some of the tools are query style like send-sms, while others are Conversation Relay specific like send-dtmf, where websocket messages also have to be sent directly. This implementation illustrates both types. A third type not explored would be queries to external websites or APIs, but it would function in a similar way to send-sms in that there are no Conversation Relay specific messages to send back.
-
-   **_Silence Handler_** - This is a utility method to break deadlocks. It is a simple implementation that sends a message after a certain amount of time, and if there is no response after a certain number of messages, it will end the call. This is a simple implementation and can be expanded to include more complex logic.
-
-   **_Twilio Service_** - This service is used to interact with the Twilio API. It abstracts the Twilio API and can be built on to add any Twilio related services, including Conversation Relay itself via the "connectConversationRelay" endpoint. This is where Conversation Relay is configured using the NodeJS helper library. Note, you need at least twilio 5.4.3 library to do so. This is done instead of the usual Twiml config.
-
-   **_Tools_** - The Tools section contains tool definitions that are used by the OpenAI service. The tools are loaded dynamically based on the toolManifest.json file, so ensure these are aligned. This is a simple implementation and can be expanded to include more complex tools and as mentioned there are Conversation Relay specific tools like send-dtmf and generic tools like send-sms included.
+This release enhances type safety and API alignment by migrating from custom streaming event interfaces to OpenAI's native typed streaming events. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
 ## Quick Tip
 Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
@@ -144,17 +90,18 @@ pnpm build
 pnpm dev
 ```
 
-4. Expose the server using ngrok:
+or
+
+```bash
+pnpm run start
+```
+
+4. Ensure the server is running on port 3001 (or configured port in `.env`).
+
+5. Optionally, expose the server using ngrok:
 ```bash
 ngrok http --domain server-yourdomain.ngrok.dev 3001
 ```
-
-## Silence Handling
-
-The system includes a robust silence detection mechanism to manage periods of inactivity during conversations. This functionality is implemented in the `SilenceHandler` class and operates based on two key thresholds:
-
-- `SILENCE_SECONDS_THRESHOLD` (5 seconds): The duration of silence before triggering a reminder
-- `SILENCE_RETRY_THRESHOLD` (3 attempts): Maximum number of reminders before ending the call
 
 ### How It Works
 
@@ -181,6 +128,13 @@ The silence handling is modular and follows separation of concerns:
 - Thresholds are configurable through constants in server.ts
 
 This design ensures reliable conversation flow while preventing indefinite silence periods, improving the overall user experience.
+
+## Silence Handling
+
+The system includes a robust silence detection mechanism to manage periods of inactivity during conversations. This functionality is implemented in the `SilenceHandler` class and operates based on two key thresholds:
+
+- `SILENCE_SECONDS_THRESHOLD` (5 seconds): The duration of silence before triggering a reminder
+- `SILENCE_RETRY_THRESHOLD` (3 attempts): Maximum number of reminders before ending the call
 
 ## Twilio Configuration
 
