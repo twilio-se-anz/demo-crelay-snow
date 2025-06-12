@@ -1,7 +1,7 @@
 {
   "name": "simple-conversation-relay-server",
-  "version": "3.2.0",
-  "description": "WebSocket server for conversation relay",
+  "version": "3.3.0",
+  "description": "WebSocket server for Twilio Conversation Relay",
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
