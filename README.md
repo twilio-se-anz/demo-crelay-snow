@@ -81,19 +81,31 @@ cd server
 
 2. Install dependencies:
 ```bash
+# Using pnpm (recommended)
 pnpm install
+
+# Or using npm
+npm install
 ```
 
-3. Build & Start the development server:
+3. For development, start the development server:
 ```bash
-pnpm build
+# Using pnpm
 pnpm dev
+
+# Or using npm
+npm run dev
 ```
 
-or
-
+For production, build and start the server:
 ```bash
-pnpm run start
+# Using pnpm
+pnpm build
+pnpm start
+
+# Or using npm
+npm run build
+npm start
 ```
 
 4. Ensure the server is running on port 3001 (or configured port in `.env`).
@@ -373,7 +385,7 @@ fly deploy
 7. Verify your context and manifest files are in the mount by logging into the machine:
 ```bash
 fly ssh console
-cd /assets
+cd assets
 ls
 ```
 
