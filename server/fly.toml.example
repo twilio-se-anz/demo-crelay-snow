@@ -1,0 +1,26 @@
+# fly.toml app configuration file generated for XXXXXX
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'XXXXX-XXXXXX-XXXXXXX'
+primary_region = 'sjc'
+
+[build]
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[mounts]
+  source = "assets"
+  destination = "/assets"
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
