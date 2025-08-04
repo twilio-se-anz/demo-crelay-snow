@@ -13,3 +13,6 @@ mcp-server/.env
 mcp-server/build
 
 .DS_Store
+server/.dockerignore
+server/Dockerfile
+server/fly.toml
