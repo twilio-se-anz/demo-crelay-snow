@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "ts-node-dev --respawn --transpile-only --esm src/server.ts"
+    "dev": "tsc && nodemon dist/server.js"
   },
   "keywords": [],
   "author": "Des Hartman",
