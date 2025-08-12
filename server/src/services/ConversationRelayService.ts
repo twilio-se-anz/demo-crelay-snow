@@ -101,6 +101,7 @@ class ConversationRelayService extends EventEmitter {
     private sessionData: SessionData;
     private silenceHandler: SilenceHandler | null;
     private logMessage: string | null;
+    private accumulatedTokens: string;
 
     /**
      * Creates a new ConversationRelayService instance.
@@ -119,10 +120,20 @@ class ConversationRelayService extends EventEmitter {
         this.sessionData = sessionData;
         this.silenceHandler = new SilenceHandler();
         this.logMessage = null;     // Utility log message
+        this.accumulatedTokens = '';
 
         // Set up response handler for LLM responses. These are proxied to separate from Web Server
         this.responseService.on('responseService.content', (response) => {
-            // logOut(`Conversation Relay`, `Response received: ${JSON.stringify(response)}`);
+            if (!response.last) {
+                // Accumulate tokens while last is false
+                this.accumulatedTokens += response.token || '';
+            } else {
+                // Display complete accumulated message when last becomes true
+                logOut(`Conversation Relay`, `Complete response: "${this.accumulatedTokens}"`);
+
+                // Reset accumulated tokens for next response
+                this.accumulatedTokens = '';
+            }
             this.emit('conversationRelay.outgoingMessage', response);
         });
 
