@@ -643,3 +643,176 @@ The server is organized into modular services:
    - Manages Twilio-specific functionality
    - Handles call control operations
    - Implements SMS and DTMF features
+
+## Interrupt Handling: AbortController vs. Boolean Flag Approach
+
+The ResponseService supports interrupting ongoing AI responses to enable natural conversation flow. This reference implementation uses a simple boolean flag approach (`this.isInterrupted`) for simplicity and ease of understanding. However, for production systems, an AbortController-based approach offers significant advantages.
+
+### Current Implementation: Boolean Flag (`this.isInterrupted`)
+
+The current implementation uses a simple boolean flag to manage interrupts:
+
+```typescript
+class ResponseService extends EventEmitter {
+    protected isInterrupted: boolean;
+
+    interrupt(): void {
+        this.isInterrupted = true;
+    }
+
+    resetInterrupt(): void {
+        this.isInterrupted = false;
+    }
+
+    private async processStream(stream: any): Promise<void> {
+        for await (const event of stream) {
+            if (this.isInterrupted) {
+                break;  // Exit the loop when interrupted
+            }
+            // Process events...
+        }
+    }
+}
+```
+
+**Advantages of Boolean Flag Approach:**
+- **Simplicity**: Easy to understand and implement
+- **Minimal Dependencies**: No additional APIs or concepts required
+- **Educational Value**: Clear demonstration of interrupt logic
+- **Low Overhead**: Minimal performance impact
+- **Synchronous**: No async complications in interrupt handling
+
+**Limitations of Boolean Flag Approach:**
+- **Manual Management**: Requires explicit reset before each operation
+- **No Native Integration**: Cannot integrate with native APIs that support AbortSignal
+- **Resource Cleanup**: No automatic cleanup of related resources
+- **Limited Scope**: Only works within the application's polling loop
+- **Race Conditions**: Potential timing issues in concurrent scenarios
+
+### Production Alternative: AbortController Approach
+
+The AbortController approach provides a more robust and standards-compliant interrupt mechanism:
+
+```typescript
+class ResponseService extends EventEmitter {
+    protected abortController: AbortController | null;
+
+    interrupt(): void {
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+    }
+
+    private async processStream(stream: any): Promise<void> {
+        // Create new AbortController for this operation
+        this.abortController = new AbortController();
+
+        // Pass abort signal to OpenAI API
+        const followUpStream = await this.openai.responses.create(
+            completionParams,
+            {
+                signal: this.abortController.signal  // Native API integration
+            }
+        );
+
+        // No manual checking required - API handles abortion internally
+        for await (const event of followUpStream) {
+            // Events automatically stop when aborted
+            // Process events...
+        }
+    }
+}
+```
+
+**Advantages of AbortController Approach:**
+- **Native API Integration**: Directly supported by fetch(), OpenAI client, and other modern APIs
+- **Automatic Resource Cleanup**: APIs handle cleanup when signal is aborted
+- **Standards Compliant**: Web standard supported across browsers and Node.js
+- **Better Performance**: No manual polling required - APIs check signal internally
+- **Immediate Cancellation**: Operations can stop immediately rather than waiting for next loop iteration
+- **Built-in Race Condition Protection**: AbortSignal state is managed atomically
+- **Event-Based**: Can listen for abort events for custom cleanup logic
+
+**Implementation Differences:**
+
+| Aspect | Boolean Flag | AbortController |
+|--------|-------------|-----------------|
+| **API Integration** | Manual checking in loops | Native support in fetch/HTTP APIs |
+| **Resource Cleanup** | Manual cleanup required | Automatic when signal aborted |
+| **Performance** | Polling overhead | Event-driven, no polling |
+| **Timing** | Checked at loop iterations | Immediate cancellation possible |
+| **Standards** | Custom implementation | Web/Node.js standard |
+| **Error Handling** | Manual error states | Built-in AbortError handling |
+
+### Performance Considerations
+
+**Boolean Flag:**
+- Minimal CPU overhead for simple boolean checks
+- Requires polling on each iteration of processing loops
+- Cannot interrupt long-running operations between checks
+- Memory usage: single boolean per service instance
+
+**AbortController:**
+- Higher initial overhead (object creation, event system)
+- More efficient for long-running operations (no polling)
+- Can interrupt operations immediately when APIs support it
+- Memory usage: AbortController object + potential listeners
+
+### Production Recommendations
+
+**Use Boolean Flag When:**
+- Building educational/reference implementations
+- System simplicity is the primary goal
+- Working with APIs that don't support AbortSignal
+- Performance overhead of AbortController is a concern
+- Team is unfamiliar with AbortController concepts
+
+**Use AbortController When:**
+- Building production systems with reliability requirements
+- Integrating with modern APIs that support AbortSignal
+- Need immediate cancellation of network operations
+- Want standards-compliant interrupt handling
+- Require automatic resource cleanup
+- Building systems that may scale to handle many concurrent operations
+
+### Migration Path
+
+To upgrade from the boolean flag to AbortController approach:
+
+1. **Replace boolean flag with AbortController:**
+   ```typescript
+   // Replace: protected isInterrupted: boolean;
+   protected abortController: AbortController | null;
+   ```
+
+2. **Update interrupt method:**
+   ```typescript
+   interrupt(): void {
+       if (this.abortController) {
+           this.abortController.abort();
+       }
+   }
+   ```
+
+3. **Remove manual reset calls:**
+   ```typescript
+   // Remove: this.resetInterrupt();
+   // AbortController creates new instance for each operation
+   ```
+
+4. **Add signal to API calls:**
+   ```typescript
+   const stream = await this.openai.responses.create(params, {
+       signal: this.abortController.signal
+   });
+   ```
+
+5. **Remove manual interrupt checks:**
+   ```typescript
+   // Remove: if (this.isInterrupted) break;
+   // API handles interruption automatically
+   ```
+
+### Conclusion
+
+This reference implementation uses the boolean flag approach to maintain simplicity and educational clarity. The concept of interrupting AI responses is more important than the specific implementation mechanism. For production systems requiring robust interrupt handling, consider migrating to the AbortController approach to leverage native API support, automatic resource cleanup, and improved performance characteristics.
