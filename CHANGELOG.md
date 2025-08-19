@@ -1,5 +1,13 @@
 # Changelog
 
+## Release v3.3.1
+
+### Development & Documentation Updates
+
+- **Updated Development Script**: Changed from `tsc && nodemon` to `tsx watch src/server.ts` for faster development cycles
+- **OpenAI Version Upgrade**: Updated OpenAI package version in package.json
+- **AbortController Documentation**: Added technical comparison section in README explaining AbortController vs. boolean flag approaches for interrupt handling
+
 ## Release v3.3
 
 This release enhances type safety and API alignment by migrating from custom streaming event interfaces to OpenAI's native typed streaming events, providing better maintainability and future-proofing.
