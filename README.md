@@ -2,9 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v4.0
+## Release v4.1
 
-This release introduces a major architectural refactor moving from inheritance-based to interface-based architecture, implementing the factory pattern for proper async initialization, and removing DeepSeek service support. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
+This release introduces service architecture refactoring that moves all OpenAI service management into ConversationRelayService, providing better encapsulation and cleaner separation of concerns. The server.ts file is now focused purely on WebSocket/HTTP handling. Additionally, variable naming has been standardized for consistency throughout the codebase. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
 
 ## Quick Tip
 Configure your Conversation Relay parameters in server/src/services/TwilioService.ts

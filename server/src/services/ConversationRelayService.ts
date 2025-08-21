@@ -72,6 +72,7 @@ import { EventEmitter } from 'events';
 import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
 import { ResponseService } from '../interfaces/ResponseService.js';
+import { OpenAIService } from './OpenAIService.js';
 
 /**
  * Interface for session data
@@ -104,14 +105,14 @@ class ConversationRelayService extends EventEmitter {
     private accumulatedTokens: string;
 
     /**
-     * Creates a new ConversationRelayService instance.
-     * Initializes event handlers for LLM responses and sets up silence detection.
+     * Creates a new ConversationRelayService instance using the factory method.
+     * Use ConversationRelayService.create() instead of constructor directly.
      * 
      * @param {ResponseService} responseService - LLM service for processing responses
      * @param {SessionData} sessionData - Session data for the conversation
      * @throws {Error} If responseService is not provided
      */
-    constructor(responseService: ResponseService, sessionData: SessionData) {
+    private constructor(responseService: ResponseService, sessionData: SessionData) {
         super();
         if (!responseService) {
             throw new Error('LLM service is required');
@@ -147,6 +148,45 @@ class ConversationRelayService extends EventEmitter {
             }
         });
         logOut(`Conversation Relay`, `Service constructed`);
+    }
+
+    /**
+     * Factory method to create a ConversationRelayService instance.
+     * Handles async OpenAI service creation internally.
+     * 
+     * @param {SessionData} sessionData - Session data for the conversation
+     * @param {string} contextFile - Context file path or environment variable fallback
+     * @param {string} toolManifestFile - Tool manifest file path or environment variable fallback
+     * @param {string} [callSid] - Optional call SID for event handling
+     * @returns {Promise<ConversationRelayService>} Initialized service instance
+     */
+    static async create(
+        sessionData: SessionData, 
+        contextFile: string, 
+        toolManifestFile: string,
+        callSid?: string
+    ): Promise<ConversationRelayService> {
+        logOut('Conversation Relay', 'Creating OpenAI Response Service');
+        const responseService = await OpenAIService.create(contextFile, toolManifestFile);
+
+        // Add call SID event listener if provided
+        if (callSid) {
+            responseService.on(`responseService.${callSid}`, (responseMessage: any) => {
+                logOut('Conversation Relay', `Got a call SID event for the response service: ${JSON.stringify(responseMessage)}`);
+                // This will be handled by the instance, but we set up the listener here
+            });
+        }
+
+        const instance = new ConversationRelayService(responseService, sessionData);
+        
+        // Set up call SID event forwarding if provided
+        if (callSid) {
+            responseService.on(`responseService.${callSid}`, (responseMessage: any) => {
+                instance.emit(`conversationRelay.${callSid}`, responseMessage);
+            });
+        }
+
+        return instance;
     }
 
     /**
@@ -258,6 +298,30 @@ class ConversationRelayService extends EventEmitter {
             logError(`Conversation Relay`, `${this.logMessage} Error in outgoing message handling: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
+    }
+
+    /**
+     * Inserts a message into the response service.
+     * Proxy method for direct access to response service functionality.
+     * 
+     * @async
+     * @param {string} role - Message role (system, user, assistant)
+     * @param {string} content - Message content
+     * @returns {Promise<void>} Resolves when message is inserted
+     */
+    async insertMessage(role: 'system' | 'user' | 'assistant', content: string): Promise<void> {
+        await this.responseService.insertMessage(role, content);
+    }
+
+    /**
+     * Updates the context and manifest files for the response service.
+     * Proxy method for direct access to response service functionality.
+     * 
+     * @param {string} contextFile - New context file path
+     * @param {string} toolManifestFile - New tool manifest file path
+     */
+    async updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void> {
+        await this.responseService.updateContextAndManifest(contextFile, toolManifestFile);
     }
 
     /**

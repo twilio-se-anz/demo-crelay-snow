@@ -48,8 +48,7 @@ interface IncomingMessage {
 
 // Define interface for WebSocket session
 interface WSSession {
-    sessionConversationRelay: ConversationRelayService;
-    sessionResponseService: OpenAIService;
+    conversationRelaySession: ConversationRelayService;
     sessionData: SessionData;
 }
 
@@ -115,7 +114,7 @@ const twilioService = new TwilioService();
  */
 app.ws('/conversation-relay', (ws: any, req: express.Request) => {
 
-    let sessionConversationRelay: ConversationRelayService | null = null;
+    let conversationRelaySession: ConversationRelayService | null = null;
     let sessionData: SessionData = {
         parameterData: {},
         setupData: {
@@ -128,8 +127,8 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
         try {
             const message: IncomingMessage = JSON.parse(data);
             // logOut('WS', `Received message of type: ${message.type}`);
-            // If the sessionConversationRelay does not exist, initialise it else handle the incoming message
-            if (!sessionConversationRelay) {
+            // If the conversationRelaySession does not exist, initialise it else handle the incoming message
+            if (!conversationRelaySession) {
                 logOut('WS', `Session Conversation Relay being initialised`);
 
                 // Since this is the first message from CR, it will be a setup message, so add the Conversation Relay "setup" message data to the session.
@@ -146,42 +145,41 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
                 const contextFile: string = message.customParameters?.contextFile || process.env.LLM_CONTEXT || 'defaultContext.md';
                 const toolManifestFile: string = message.customParameters?.toolManifestFile || process.env.LLM_MANIFEST || 'defaultToolManifest.json';
 
-                // Create new response Service. Creation is Async, so using factory method
-                logOut('WS', `Creating Response Service`);
-                const sessionResponseService = await OpenAIService.create(contextFile, toolManifestFile);
-
-                // Add an event listener for the response service for this particular session based on the call SID. This allows any endpoint to send a message to Session Response Service.
-                if (message.callSid) {
-                    sessionResponseService.on(`responseService.${message.callSid}`, (responseMessage: any) => {
-                        logOut('WS', `Got a call SID event for the session response service: ${JSON.stringify(responseMessage)}`);
-                        // Send the message to the Session Response Service
-                        // sessionResponseService.incomingMessage(responseMessage);
-                    });
-                }
-
                 logOut('WS', `Creating ConversationRelayService`);
-                sessionConversationRelay = new ConversationRelayService(sessionResponseService, sessionData);
+                conversationRelaySession = await ConversationRelayService.create(
+                    sessionData,
+                    contextFile, 
+                    toolManifestFile,
+                    message.callSid
+                );
 
                 // Attach the Event listener to send event messages from the Conversation Relay back to the WS client
-                sessionConversationRelay.on('conversationRelay.outgoingMessage', (outgoingMessage: any) => {
+                conversationRelaySession.on('conversationRelay.outgoingMessage', (outgoingMessage: any) => {
                     // logOut('WS', `Sending message out: ${JSON.stringify(outgoingMessage)}`);
                     ws.send(JSON.stringify(outgoingMessage));
                 });
+
+                // Add event listener for call SID specific events if callSid exists
+                if (message.callSid) {
+                    conversationRelaySession.on(`conversationRelay.${message.callSid}`, (responseMessage: any) => {
+                        logOut('WS', `Got a call SID event for the conversation relay: ${JSON.stringify(responseMessage)}`);
+                        // Handle the message as needed
+                    });
+                }
 
                 // Add the session to the wsSessionsMap, so it can be referenced using a particular call SID.
                 if (message.callSid) {
                     wsSessionsMap.set(message.callSid,
                         {
-                            sessionConversationRelay,
-                            sessionResponseService,
+                            conversationRelaySession,
                             sessionData
                         }
                     );
                 }
             }
 
-            if (sessionConversationRelay) {
-                sessionConversationRelay.incomingMessage(message);
+            if (conversationRelaySession) {
+                conversationRelaySession.incomingMessage(message);
             }
 
         } catch (error) {
@@ -193,8 +191,8 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
     ws.on('close', () => {
         logOut('WS', 'Client ws disconnected');
         // Clean up ConversationRelay and its listeners
-        if (sessionConversationRelay) {
-            sessionConversationRelay.cleanup();
+        if (conversationRelaySession) {
+            conversationRelaySession.cleanup();
         }
     });
 
@@ -202,8 +200,8 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
     ws.on('error', (error: Error) => {
         logError('WS', `WebSocket error: ${error instanceof Error ? error.message : String(error)}`);
         // Clean up ConversationRelay and its listeners
-        if (sessionConversationRelay) {
-            sessionConversationRelay.cleanup();
+        if (conversationRelaySession) {
+            conversationRelaySession.cleanup();
         }
     });
 });
@@ -327,7 +325,7 @@ app.post('/twilioStatusCallback', async (req: express.Request, res: express.Resp
     let wsSession = wsSessionsMap.get(callSid);
 
     if (wsSession) {
-        let sessionResponseService = wsSession.sessionResponseService;
+        let conversationRelaySession = wsSession.conversationRelaySession;
 
         // Let the Twilio Service decide what to give back to the Response Service.
         // const twilioService = new TwilioService();
@@ -335,7 +333,7 @@ app.post('/twilioStatusCallback', async (req: express.Request, res: express.Resp
 
         // Now Send the message to the Session Response Service directly if needed. NOTE: It is assumed that Twilio Service will manipulate the content based on it's understanding of the message and if no action is required, null it.
         if (evaluatedStatusCallback) {
-            sessionResponseService.insertMessage('system', JSON.stringify(evaluatedStatusCallback));
+            await conversationRelaySession.insertMessage('system', JSON.stringify(evaluatedStatusCallback));
         }
     }
 
@@ -358,9 +356,9 @@ app.post('/updateResponseService', async (req: express.Request, res: express.Res
         let wsSession = wsSessionsMap.get(callSid);
 
         if (wsSession) {
-            let sessionResponseService = wsSession.sessionResponseService;
+            let conversationRelaySession = wsSession.conversationRelaySession;
             // Now update the context and manifest files for the sessionResponseService.
-            sessionResponseService.updateContextAndManifest(contextFile, toolManifestFile);
+            await conversationRelaySession.updateContextAndManifest(contextFile, toolManifestFile);
         }
     }
 

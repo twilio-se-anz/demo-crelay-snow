@@ -1,5 +1,35 @@
 # Changelog
 
+## Release v4.1.0
+
+### Service Architecture Refactoring
+
+#### ConversationRelayService Enhancement
+- **Enhanced Encapsulation**: Moved all OpenAI service creation and management into ConversationRelayService
+- **Async Factory Pattern**: Added static `create()` factory method for proper async initialization of ConversationRelayService
+- **Proxy Methods**: Added `insertMessage()` and `updateContextAndManifest()` proxy methods for clean API access
+- **Event Management**: Improved event forwarding from `responseService.${callSid}` to `conversationRelay.${callSid}`
+
+#### Server.ts Simplification
+- **Removed Direct OpenAI Service Creation**: Eliminated lines 146-151 and 155-160 from server.ts 
+- **Updated WSSession Interface**: Removed `sessionResponseService` dependency from WebSocket sessions
+- **Cleaner Architecture**: Server.ts now focuses purely on WebSocket/HTTP handling without LLM service management
+- **Method Migration**: All `sessionResponseService` calls now use `conversationRelaySession` proxy methods
+- **Variable Naming Consistency**: Renamed `sessionConversationRelay` to `conversationRelaySession` throughout server.ts for consistent naming conventions
+
+#### Interface Updates
+- **Enhanced ResponseService Interface**: Added `updateContextAndManifest()` method to the interface definition
+- **Type Safety**: Improved type checking with proper role parameter types for `insertMessage()`
+- **Event Consistency**: Standardized event naming from `responseService.${callSid}` to `conversationRelay.${callSid}`
+
+### Benefits
+- **Single Responsibility**: ConversationRelayService now manages all LLM service interactions
+- **Improved Maintainability**: Clear separation between WebSocket handling and conversation management
+- **Better Encapsulation**: All OpenAI service logic contained within a single service class
+- **Consistent API**: Uniform access to response service functionality through proxy methods
+
+This refactoring provides better code organization and maintainability while maintaining full backward compatibility.
+
 ## Release v4.0.1
 
 ### Bug Fixes

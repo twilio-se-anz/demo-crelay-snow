@@ -69,6 +69,15 @@ export interface ResponseService extends EventEmitter {
     interrupt(): void;
 
     /**
+     * Updates the context and manifest files for the response service
+     * 
+     * @param contextFile - New context file path
+     * @param toolManifestFile - New tool manifest file path
+     * @returns Promise that resolves when update is complete
+     */
+    updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void>;
+
+    /**
      * Performs cleanup of service resources
      * Removes event listeners and cleans up any active connections
      */
