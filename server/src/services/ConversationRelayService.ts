@@ -73,31 +73,9 @@ import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
 import { ResponseService } from '../interfaces/ResponseService.js';
 import { OpenAIService } from './OpenAIService.js';
+import type { SessionData, IncomingMessage, OutgoingMessage, ConversationRelayService as IConversationRelayService } from '../interfaces/ConversationRelayService.js';
 
-/**
- * Interface for session data
- */
-interface SessionData {
-    parameterData: Record<string, any>;
-    setupData: {
-        callSid: string;
-        [key: string]: any;
-    };
-}
-
-/**
- * Interface for incoming message
- */
-interface IncomingMessage {
-    type: 'setup' | 'prompt' | 'dtmf' | 'interrupt' | 'info' | 'error';
-    voicePrompt?: string;
-    utteranceUntilInterrupt?: string;
-    digit?: string;
-    description?: string;
-    [key: string]: any;
-}
-
-class ConversationRelayService extends EventEmitter {
+class ConversationRelayService extends EventEmitter implements IConversationRelayService {
     private responseService: ResponseService;
     private sessionData: SessionData;
     private silenceHandler: SilenceHandler | null;
@@ -270,29 +248,28 @@ class ConversationRelayService extends EventEmitter {
                     logOut(`Conversation Relay`, `${this.logMessage} ERROR: ${message.description}`);
                     break;
                 default:
-                    logError(`Conversation Relay`, `${this.logMessage} UNKNOWN: "${message.type}"`);
+                    logError(`Conversation Relay`, `${this.logMessage} UNKNOWN: "${(message as any).type}"`);
             }
         } catch (error) {
             logError(`Conversation Relay`, `${this.logMessage} Error in message handling: ${error instanceof Error ? error.message : String(error)}`);
-            throw new Error(`Conversation Relay Switch Message type ${message.type}: ${this.logMessage} Error in message handling: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(`Conversation Relay Switch Message type ${(message as any).type}: ${this.logMessage} Error in message handling: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
     /**
-     * Handles outgoing messages from agents or other direct sources.
-     * Bypasses the Response Service logic and only inserts the message into context.
-     * Used when a live agent or similar process overrides the Response Service.
+     * Handles outgoing messages to be sent to Twilio via WebSocket.
+     * Sends structured messages directly to the client without inserting into conversation context.
+     * Use insertMessage() for adding content to conversation history.
      * 
      * @async
-     * @param {string} message - Message content to send
-     * @emits conversationRelay.agentMessage
+     * @param {OutgoingMessage} message - Structured outgoing message object
+     * @emits conversationRelay.outgoingMessage
      * @throws {Error} If message handling fails
      * @returns {Promise<void>} Resolves when message is processed
      */
-    async outgoingMessage(message: string): Promise<void> {
+    async outgoingMessage(message: OutgoingMessage): Promise<void> {
         try {
-            logOut(`Conversation Relay`, `${this.logMessage} Outgoing message from Agent: ${message}`);
-            await this.responseService.insertMessage('system', message);
+            logOut(`Conversation Relay`, `${this.logMessage} Outgoing structured message: ${JSON.stringify(message)}`);
             this.emit('conversationRelay.outgoingMessage', message);
         } catch (error) {
             logError(`Conversation Relay`, `${this.logMessage} Error in outgoing message handling: ${error instanceof Error ? error.message : String(error)}`);

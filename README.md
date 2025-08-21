@@ -4,7 +4,7 @@ This is a reference implementation aimed at introducing the key concepts of Conv
 
 ## Release v4.1
 
-This release introduces service architecture refactoring that moves all OpenAI service management into ConversationRelayService, providing better encapsulation and cleaner separation of concerns. The server.ts file is now focused purely on WebSocket/HTTP handling. Additionally, variable naming has been standardized for consistency throughout the codebase. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
+This release introduces service architecture refactoring that moves all OpenAI service management into ConversationRelayService, providing better encapsulation and cleaner separation of concerns. The server.ts file is now focused purely on WebSocket/HTTP handling. Additionally, comprehensive TypeScript interface enforcement has been implemented for all Twilio WebSocket outgoing messages, enhancing type safety and developer experience. Variable naming has been standardized for consistency throughout the codebase. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
 
 ## Quick Tip
 Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
@@ -53,7 +53,8 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 │   ├── src/              # Source code directory
 │   │   ├── server.ts     # Main server implementation
 │   │   ├── interfaces/   # TypeScript interface definitions
-│   │   │   └── ResponseService.d.ts # ResponseService interface contract
+│   │   │   ├── ResponseService.d.ts # ResponseService interface contract
+│   │   │   └── ConversationRelayService.d.ts # Conversation Relay interfaces with Twilio message types
 │   │   ├── services/     # Core service implementations
 │   │   │   ├── ConversationRelayService.ts
 │   │   │   ├── OpenAIService.ts # Implements ResponseService interface
@@ -71,6 +72,39 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 ## Server Component
 
 The server handles WebSocket connections and manages conversation relay functionality. It includes GPT service integration for natural language processing and Twilio integration for voice call handling.
+
+### TypeScript Interface Enforcement
+
+Version 4.1.0 introduces comprehensive TypeScript interfaces for all Twilio WebSocket message types, providing enhanced type safety and developer experience:
+
+#### Outgoing Message Types
+The system now includes strongly-typed interfaces for all Twilio WebSocket outgoing messages:
+
+- **`TextTokensMessage`**: For sending text to be converted to speech
+- **`PlayMediaMessage`**: For playing audio from URLs
+- **`SendDigitsMessage`**: For sending DTMF digits
+- **`SwitchLanguageMessage`**: For changing TTS and transcription languages
+- **`EndSessionMessage`**: For terminating conversation sessions
+
+These are unified under the `OutgoingMessage` union type, ensuring compile-time validation:
+
+```typescript
+// Example usage with type safety
+const textMessage: TextTokensMessage = {
+    type: 'text',
+    token: 'Hello, how can I help you?',
+    last: true,
+    interruptible: true
+};
+
+await conversationRelaySession.outgoingMessage(textMessage);
+```
+
+#### Benefits
+- **Compile-time Type Checking**: Prevents runtime errors from malformed messages
+- **IntelliSense Support**: Enhanced developer experience with auto-completion
+- **Documentation**: Self-documenting code through interface definitions
+- **Maintainability**: Easier refactoring and code maintenance
 
 ### Running the Server
 

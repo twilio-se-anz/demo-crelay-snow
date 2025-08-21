@@ -13,38 +13,10 @@ import { logOut, logError } from './utils/logger.js';
 
 // Import the services
 import { ConversationRelayService } from './services/ConversationRelayService.js'
-import { OpenAIService } from './services/OpenAIService.js';
 import { TwilioService } from './services/TwilioService.js';
+import type { IncomingMessage, OutgoingMessage, SessionData } from './interfaces/ConversationRelayService.js';
 
-// Define interfaces for session data
-interface SessionData {
-    parameterData: Record<string, any>;
-    setupData: {
-        callSid: string;
-        customParameters?: {
-            callReference?: string;
-            contextFile?: string;
-            toolManifestFile?: string;
-        };
-        [key: string]: any;
-    };
-}
 
-// Define interface for incoming message
-interface IncomingMessage {
-    type: 'setup' | 'prompt' | 'dtmf' | 'interrupt' | 'info' | 'error';
-    callSid?: string;
-    customParameters?: {
-        callReference?: string;
-        contextFile?: string;
-        toolManifestFile?: string;
-    };
-    voicePrompt?: string;
-    utteranceUntilInterrupt?: string;
-    digit?: string;
-    description?: string;
-    [key: string]: any;
-}
 
 // Define interface for WebSocket session
 interface WSSession {
@@ -126,11 +98,10 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
     ws.on('message', async (data: string) => {
         try {
             const message: IncomingMessage = JSON.parse(data);
-            // logOut('WS', `Received message of type: ${message.type}`);
+
             // If the conversationRelaySession does not exist, initialise it else handle the incoming message
             if (!conversationRelaySession) {
                 logOut('WS', `Session Conversation Relay being initialised`);
-
                 // Since this is the first message from CR, it will be a setup message, so add the Conversation Relay "setup" message data to the session.
                 logOut('WS', `Adding setup CR setup message data to sessionData. Message type: ${message.type} and callReference: ${message.customParameters?.callReference}`);
 
@@ -148,13 +119,13 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
                 logOut('WS', `Creating ConversationRelayService`);
                 conversationRelaySession = await ConversationRelayService.create(
                     sessionData,
-                    contextFile, 
+                    contextFile,
                     toolManifestFile,
                     message.callSid
                 );
 
                 // Attach the Event listener to send event messages from the Conversation Relay back to the WS client
-                conversationRelaySession.on('conversationRelay.outgoingMessage', (outgoingMessage: any) => {
+                conversationRelaySession.on('conversationRelay.outgoingMessage', (outgoingMessage: OutgoingMessage) => {
                     // logOut('WS', `Sending message out: ${JSON.stringify(outgoingMessage)}`);
                     ws.send(JSON.stringify(outgoingMessage));
                 });
