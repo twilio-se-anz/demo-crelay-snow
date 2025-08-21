@@ -398,9 +398,8 @@ class OpenAIService extends EventEmitter implements ResponseService {
                                     model: this.model,
                                     input: this.inputMessages,
                                     tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
-                                    previous_response_id: this.currentResponseId,
                                     stream: true,
-                                    store: true
+                                    instructions: this.instructions
                                 });
 
                                 // Process the follow-up stream recursively
@@ -420,10 +419,6 @@ class OpenAIService extends EventEmitter implements ResponseService {
                     break;
 
                 case 'response.completed':
-                    // Response completed - store the response ID for conversation continuity
-                    if ('response' in eventData && eventData.response?.id) {
-                        this.currentResponseId = eventData.response.id;
-                    }
 
                     // Only emit final content marker if this is the end of the conversation
                     // (not if we're about to create a follow-up for tool results)
@@ -505,17 +500,9 @@ class OpenAIService extends EventEmitter implements ResponseService {
                 model: this.model,
                 input: this.inputMessages,
                 stream: true,
-                store: true, // Enable conversation storage
-                tools: tools
+                tools: tools,
+                instructions: this.instructions
             };
-
-            // If we have an existing conversation, continue it
-            if (this.currentResponseId) {
-                createParams.previous_response_id = this.currentResponseId;
-            } else {
-                // Only add instructions on new conversations
-                createParams.instructions = this.instructions;
-            }
 
             const stream = await this.openai.responses.create(createParams);
 
