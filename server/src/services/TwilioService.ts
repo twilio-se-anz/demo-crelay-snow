@@ -1,6 +1,7 @@
 import twilio from 'twilio';
 import { EventEmitter } from 'events';
 import { logOut, logError } from '../utils/logger.js';
+import VoiceResponse from 'twilio/lib/twiml/VoiceResponse.js';
 
 /**
  * Interface for status callback object
@@ -105,13 +106,14 @@ class TwilioService extends EventEmitter {
             logOut('TwilioService', `Generating TwiML for call with callReference: ${callReference}`);
 
             // Generate the Twiml we will need once the call is connected. Note, this could be done in two steps via the server, were we set a url: instead of twiml:, but this just seemed overly complicated.
-            const response = new twilio.twiml.VoiceResponse();
-            const connect = response.connect();
-            const conversationRelay = connect.conversationRelay({
+            const response: VoiceResponse = new twilio.twiml.VoiceResponse();
+            const connect: VoiceResponse.Connect = response.connect();
+            const conversationRelay: VoiceResponse.ConversationRelay = connect.conversationRelay({
                 url: `wss://${serverBaseUrl}/conversation-relay`,
                 welcomeGreeting: "Hi! How can I help you today?",
                 transcriptionProvider: "Deepgram",
                 speechModel: "nova-3-general",
+                hints: "",  // List of hint words for the STT engine
                 interruptible: "any",
                 ttsProvider: "Elevenlabs",
                 voice: "Charlie-flash_v2_5",
