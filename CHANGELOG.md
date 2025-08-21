@@ -1,5 +1,23 @@
 # Changelog
 
+## Release v3.3.2
+
+### Bug Fixes
+
+#### Fixed Duplicate Function Call Error
+- **Issue**: OpenAI Response API was rejecting requests with "400 Duplicate item found" error after tool execution
+- **Root Cause**: The `store: true` parameter caused conflicts between Response API's internal state management and manual `inputMessages` management
+- **Solution**: Removed `store: true` and `previous_response_id` from all Response API calls, letting manual conversation state management handle everything
+- **Impact**: Tool calls (like SMS) now work correctly with multiple interruptions and follow-up responses
+
+#### Technical Details
+- Response API with `store: true` maintains conversation state internally
+- Manual function call management in `inputMessages` conflicted with API's stored state
+- Removing conversation storage eliminated both "duplicate item" and "no tool output" errors
+- System now uses traditional accumulative `inputMessages` approach without API storage conflicts
+
+This fix ensures reliable tool execution in conversation flows with multiple user interactions and interruptions.
+
 ## Release v3.3.1
 
 ### Development & Documentation Updates
