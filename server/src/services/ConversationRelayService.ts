@@ -71,7 +71,7 @@
 import { EventEmitter } from 'events';
 import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
-import { ResponseService } from './ResponseService.js';
+import { ResponseService } from '../interfaces/ResponseService.js';
 
 /**
  * Interface for session data
@@ -166,7 +166,7 @@ class ConversationRelayService extends EventEmitter {
 
         // This first system message pushes all the data into the Response Service in preparation for the conversation under generateResponse.
         const initialMessage = `These are all the details of the call: ${JSON.stringify(setupData, null, 4)} and the parameter data needed to complete your objective: ${JSON.stringify(parameterData, null, 4)}. Use this to complete your objective`;
-        await this.responseService.insertMessageIntoContext('system', initialMessage);
+        await this.responseService.insertMessage('system', initialMessage);
 
         // Initialize and start silence monitoring. When triggered it will emit a 'silence' event with a message
         if (this.silenceHandler) {
@@ -252,7 +252,7 @@ class ConversationRelayService extends EventEmitter {
     async outgoingMessage(message: string): Promise<void> {
         try {
             logOut(`Conversation Relay`, `${this.logMessage} Outgoing message from Agent: ${message}`);
-            await this.responseService.insertMessageIntoContext('system', message);
+            await this.responseService.insertMessage('system', message);
             this.emit('conversationRelay.outgoingMessage', message);
         } catch (error) {
             logError(`Conversation Relay`, `${this.logMessage} Error in outgoing message handling: ${error instanceof Error ? error.message : String(error)}`);

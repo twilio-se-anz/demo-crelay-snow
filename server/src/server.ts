@@ -14,7 +14,6 @@ import { logOut, logError } from './utils/logger.js';
 // Import the services
 import { ConversationRelayService } from './services/ConversationRelayService.js'
 import { OpenAIService } from './services/OpenAIService.js';
-import { DeepSeekService } from './services/DeepSeekService.js';
 import { TwilioService } from './services/TwilioService.js';
 
 // Define interfaces for session data
@@ -50,7 +49,7 @@ interface IncomingMessage {
 // Define interface for WebSocket session
 interface WSSession {
     sessionConversationRelay: ConversationRelayService;
-    sessionResponseService: OpenAIService | DeepSeekService;
+    sessionResponseService: OpenAIService;
     sessionData: SessionData;
 }
 
@@ -143,15 +142,13 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
                     sessionData.parameterData = parameterDataMap.get(message.customParameters.callReference) || { requestData: {} };
                 }
 
-                // This loads the initial context and manifest of Conversation Relay setup message
-                let contextFile = message.customParameters?.contextFile;
-                let toolManifestFile = message.customParameters?.toolManifestFile;
+                // This loads the initial context and manifest either as parameters, env or default.
+                const contextFile: string = message.customParameters?.contextFile || process.env.LLM_CONTEXT || 'defaultContext.md';
+                const toolManifestFile: string = message.customParameters?.toolManifestFile || process.env.LLM_MANIFEST || 'defaultToolManifest.json';
 
-                // Create new response Service.
+                // Create new response Service. Creation is Async, so using factory method
                 logOut('WS', `Creating Response Service`);
-                const sessionResponseService = new OpenAIService();
-                // const sessionResponseService = new DeepSeekService();
-                // const sessionResponseService = new MCPResponseService();
+                const sessionResponseService = await OpenAIService.create(contextFile, toolManifestFile);
 
                 // Add an event listener for the response service for this particular session based on the call SID. This allows any endpoint to send a message to Session Response Service.
                 if (message.callSid) {
@@ -338,7 +335,7 @@ app.post('/twilioStatusCallback', async (req: express.Request, res: express.Resp
 
         // Now Send the message to the Session Response Service directly if needed. NOTE: It is assumed that Twilio Service will manipulate the content based on it's understanding of the message and if no action is required, null it.
         if (evaluatedStatusCallback) {
-            sessionResponseService.insertMessageIntoContext('system', JSON.stringify(evaluatedStatusCallback));
+            sessionResponseService.insertMessage('system', JSON.stringify(evaluatedStatusCallback));
         }
     }
 

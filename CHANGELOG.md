@@ -1,5 +1,106 @@
 # Changelog
 
+## Release v4.0.0
+
+This release introduces a major architectural refactor that fundamentally changes how LLM services are implemented and managed, moving from inheritance-based to interface-based architecture while fixing critical design issues.
+
+### 🚨 Breaking Changes
+
+#### Interface-Based Architecture (Composition over Inheritance)
+- **Removed**: `ResponseService.ts` base class - the inheritance-based approach has been completely removed
+- **Added**: `ResponseService.d.ts` interface defining the contract for all LLM service implementations
+- **Changed**: OpenAIService now implements the ResponseService interface instead of extending a base class
+- **Benefits**: Better TypeScript support, cleaner separation of concerns, easier testing and mocking
+
+#### Factory Pattern for Async Initialization
+- **Fixed**: Invalid async constructor pattern in OpenAIService
+- **Changed**: Constructor is now private and synchronous-only
+- **Added**: Static `create()` factory method for proper async initialization
+- **Migration**: Replace `new OpenAIService(contextFile, toolManifestFile)` with `await OpenAIService.create(contextFile, toolManifestFile)`
+
+#### Service Removal
+- **Removed**: Complete removal of DeepSeek service support
+- **Simplified**: System now focuses exclusively on OpenAI integration
+- **Environment**: DEEPSEEK_API_KEY and DEEPSEEK_MODEL environment variables are no longer used
+
+#### API Standardization
+- **Changed**: Method `insertMessageIntoContext()` renamed to `insertMessage()` for consistency with interface
+- **Standardized**: All ResponseService implementations now follow the same method signatures
+- **Improved**: Better error handling and type safety across all service methods
+
+### Technical Improvements
+
+#### Enhanced Type Safety
+- **Interface Contracts**: All LLM services must implement the ResponseService interface
+- **Type Definitions**: Comprehensive TypeScript interfaces for ContentResponse, ToolResult, and ToolResultEvent
+- **Event Standardization**: Consistent event emission patterns across all services
+
+#### Import Structure Updates
+- **Interface Imports**: Updated from concrete class imports to interface definitions
+- **Path Updates**: ConversationRelayService now imports from `../interfaces/ResponseService.js`
+- **Cleaner Dependencies**: Better separation between interfaces and implementations
+
+### Migration Guide
+
+#### For OpenAIService Usage:
+```typescript
+// Before (v3.x)
+const service = new OpenAIService(contextFile, toolManifestFile);
+
+// After (v4.0)
+const service = await OpenAIService.create(contextFile, toolManifestFile);
+```
+
+#### For Custom LLM Providers:
+```typescript
+// Before (v3.x)
+class CustomService extends ResponseService {
+  constructor() {
+    super();
+    // initialization
+  }
+}
+
+// After (v4.0)
+class CustomService extends EventEmitter implements ResponseService {
+  private constructor() {
+    super();
+    // sync initialization only
+  }
+  
+  static async create(): Promise<CustomService> {
+    const service = new CustomService();
+    await service.initialize();
+    return service;
+  }
+  
+  // Implement all ResponseService interface methods
+  async generateResponse(role: 'user' | 'system', prompt: string): Promise<void> { ... }
+  async insertMessage(role: 'system' | 'user' | 'assistant', message: string): Promise<void> { ... }
+  interrupt(): void { ... }
+  cleanup(): void { ... }
+}
+```
+
+#### For Method Name Updates:
+```typescript
+// Before (v3.x)
+await responseService.insertMessageIntoContext('system', message);
+
+// After (v4.0)
+await responseService.insertMessage('system', message);
+```
+
+### Architecture Benefits
+
+- **Composition over Inheritance**: More flexible and maintainable design pattern
+- **Interface Segregation**: Clear contracts for service implementations
+- **Dependency Inversion**: Depend on interfaces, not concrete implementations
+- **Better Testing**: Easier to mock and test service interactions
+- **Type Safety**: Compile-time checking of service method implementations
+
+This release represents a fundamental improvement in the codebase architecture, providing better maintainability, type safety, and extensibility while removing deprecated service providers.
+
 ## Release v3.3.1
 
 ### Development & Documentation Updates

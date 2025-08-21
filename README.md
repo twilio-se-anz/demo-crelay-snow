@@ -2,9 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v3.3
+## Release v4.0
 
-This release enhances type safety and API alignment by migrating from custom streaming event interfaces to OpenAI's native typed streaming events. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
+This release introduces a major architectural refactor moving from inheritance-based to interface-based architecture, implementing the factory pattern for proper async initialization, and removing DeepSeek service support. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
 
 ## Quick Tip
 Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
@@ -52,11 +52,11 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 │   │   └── MyToolManifest.json # Specific tools
 │   ├── src/              # Source code directory
 │   │   ├── server.ts     # Main server implementation
+│   │   ├── interfaces/   # TypeScript interface definitions
+│   │   │   └── ResponseService.d.ts # ResponseService interface contract
 │   │   ├── services/     # Core service implementations
 │   │   │   ├── ConversationRelayService.ts
-│   │   │   ├── DeepSeekService.ts
-│   │   │   ├── OpenAIService.ts
-│   │   │   ├── ResponseService.ts
+│   │   │   ├── OpenAIService.ts # Implements ResponseService interface
 │   │   │   ├── SilenceHandler.ts
 │   │   │   └── TwilioService.ts
 │   │   ├── tools/        # Tool implementations
@@ -177,7 +177,7 @@ This endpoint will handle incoming calls and establish the WebSocket connection 
 3. The server then:
    - Stores the call parameters for the session in a wsSessionsMap
    - Retrieves any parameter data associated with the callReference
-   - Initializes the ResponseService with the specified context and tool manifest files
+   - Creates a ResponseService instance using the factory pattern with the specified context and tool manifest files
    - Creates a ConversationRelayService instance with:
      - ResponseService for LLM interactions
      - Session data containing setup information and parameters
@@ -630,7 +630,9 @@ The server is organized into modular services:
    - Coordinates between different services
 
 2. `OpenAIService`
-   - Manages GPT integration
+   - Implements the ResponseService interface for OpenAI integration
+   - Uses factory pattern for proper async initialization
+   - Manages GPT integration via OpenAI's Response API
    - Handles prompt construction and response processing
    - Implements retry logic and error handling
 
