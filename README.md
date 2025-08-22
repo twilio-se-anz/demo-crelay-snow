@@ -1,33 +1,87 @@
-# Simple Conversation Relay
+# ITSM ServiceNow Bot using Twilio Conversation Relay
 
-This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
+This is an ITSM (IT Service Management) bot implementation that integrates ServiceNow with Twilio's Conversation Relay API to provide automated customer support through voice calls. The bot can authenticate customers, manage ServiceNow tickets, and provide real-time assistance for IT support issues.
 
-## Release v3.3
+## Key Features
 
-This release enhances type safety and API alignment by migrating from custom streaming event interfaces to OpenAI's native typed streaming events. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
+- **ServiceNow Integration**: Full CRUD operations for incident tickets
+- **Customer Authentication**: OTP-based verification system
+- **Voice-Driven Support**: Natural conversation interface using AI
+- **Real-time Ticket Management**: Create, update, and query tickets during calls
+- **Security First**: Mandatory verification before sensitive operations
 
-## Quick Tip
-Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
+## ServiceNow Tools
 
-```typescript
-      // Generate the Twiml we will need once the call is connected. Note, this could be done in two steps via the server, were we set a url: instead of twiml:, but this just seemed overly complicated.
-      const response = new twilio.twiml.VoiceResponse();
-      const connect = response.connect();
-      const conversationRelay = connect.conversationRelay({
-            url: `wss://${serverBaseUrl}/conversation-relay`,
-            transcriptionProvider: "deepgram",
-            speechModel: "nova-3-general",
-            interruptible: "any",
-            ttsProvider: "Elevenlabs",
-            voice: "Charlie-flash_v2_5",
-            dtmfDetection: true,
-      } as any);
+The bot includes comprehensive ServiceNow integration tools for incident management:
 
-      conversationRelay.parameter({
-            name: 'callReference',
-            value: callReference
-      });
-```
+### 1. `lookup-customer`
+- **Purpose**: Identifies customers and retrieves their ServiceNow profile
+- **Functionality**: 
+  - Searches for users by phone number
+  - Returns customer details (name, email, sys_id)
+  - Lists open tickets for the customer
+- **Usage**: Automatically called at the start of conversations for customer identification
+
+### 2. `create-servicenow-ticket`
+- **Purpose**: Creates new incident tickets in ServiceNow
+- **Requirements**: 
+  - Customer sys_id (obtained from lookup-customer)
+  - Mandatory verification before creation
+- **Features**:
+  - Full incident field support (priority, urgency, category)
+  - Parent-child ticket relationships
+  - Work notes and detailed descriptions
+  - Automatic caller assignment
+
+### 3. `get-servicenow-ticket`
+- **Purpose**: Retrieves detailed information about existing tickets
+- **Functionality**:
+  - Fetches ticket status, priority, and assignment details
+  - Provides complete ticket history
+  - Shows resolution information
+- **Usage**: Query ticket status by ticket number
+
+### 4. `update-servicenow-ticket`
+- **Purpose**: Updates existing incident tickets
+- **Features**:
+  - State transitions (New, In Progress, Resolved, Closed)
+  - Priority and urgency adjustments
+  - Work notes documentation
+  - Resolution with close codes
+  - Assignment to users/groups
+- **Close Codes**: 
+  - Duplicate
+  - Known error
+  - No resolution provided
+  - Resolved by caller
+  - Resolved by change
+  - Resolved by problem
+  - Resolved by request
+  - Solution provided
+  - Workaround provided
+  - User error
+
+## Verification Tools
+
+The system implements a robust OTP-based verification system for security:
+
+### 1. `send-verification`
+- **Purpose**: Sends one-time passwords for customer authentication
+- **Channels**:
+  - SMS verification
+  - Voice call verification
+- **Features**:
+  - 6-digit OTP generation
+  - Configurable delivery channel
+  - E.164 phone number format support
+
+### 2. `check-verification`
+- **Purpose**: Validates OTP codes entered by customers
+- **Security**:
+  - Time-limited codes
+  - Single-use validation
+  - Automatic retry handling
+- **Integration**: Required before any ServiceNow write operations
 
 ## Prerequisites
 
@@ -35,6 +89,11 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 - pnpm
 - ngrok
 - TypeScript
+- ServiceNow instance with REST API access
+- Twilio account with:
+  - Phone number
+  - Verify service (for OTP)
+  - Conversation Relay enabled
 
 ## Project Structure
 
@@ -300,49 +359,114 @@ The ResponseService loads these tools during initialization and makes them avail
 Create a `.env` file in the server directory with the following variables:
 
 ```bash
+# Server Configuration
 PORT=3001                                    # Server port number
 SERVER_BASE_URL=your_server_url              # Base URL for your server (e.g., ngrok URL)
+
+# OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key          # OpenAI API key for GPT integration
-OPENAI_MODEL=gpt-4-1106-preview             # OpenAI model to use for conversations
+OPENAI_MODEL=gpt-4o                         # OpenAI model to use for conversations
+
+# ServiceNow Configuration
+SERVICENOW_INSTANCE=your_instance           # ServiceNow instance name or full URL
+SERVICENOW_USERNAME=your_username           # ServiceNow API username
+SERVICENOW_PASSWORD=your_password           # ServiceNow API password
+
+# Twilio Configuration (for verification)
+TWILIO_ACCOUNT_SID=your_account_sid         # Twilio account SID
+TWILIO_AUTH_TOKEN=your_auth_token           # Twilio auth token
+TWILIO_VERIFY_SERVICE_SID=your_verify_sid   # Twilio Verify service SID
+TWILIO_FROM_NUMBER=your_phone_number        # Twilio phone number for SMS
 
 # Dynamic Context Configuration
-LLM_CONTEXT=MyContext.md                   # Specify which context file to use (defaults to defaultContext.md)
-LLM_MANIFEST=MyToolManifest.json      # Specify which tool manifest to use (defaults to defaultToolManifest.json)
+LLM_CONTEXT=Data3Context.md                 # Context file for ITSM operations
+LLM_MANIFEST=Data3ToolManifest.json         # Tool manifest with ServiceNow tools
 ```
 
-These variables are used by the server for:
-- Configuring the server port
-- Setting the server's base URL for Twilio integration
-- Authenticating with OpenAI's API
-- Specifying the OpenAI model for conversations
-- Loading specific context and tool configurations
+## Quick Start
 
-### Dynamic Context System
+1. **Clone the repository**:
+```bash
+git clone https://github.com/twilio-se-anz/demo-crelay-snow.git
+cd demo-crelay-snow
+```
 
-The system supports dynamic context loading through environment variables, allowing different conversation contexts and tool configurations based on your needs. This feature enables the system to adapt its behavior and capabilities for different use cases.
+2. **Install dependencies**:
+```bash
+cd server
+pnpm install
+```
 
-The dynamic context system is organized in the `server/assets` directory with multiple context and tool manifest files:
+3. **Configure environment**:
+- Copy `.env.example` to `.env`
+- Add your ServiceNow, OpenAI, and Twilio credentials
 
-- `defaultContext.md` and `defaultToolManifest.json` - Used when no specific context is configured
-- `MyContext.md` and `MyToolManifest.json` - Specialized context and tools for Bill of Quantities calls
+4. **Start the development server**:
+```bash
+pnpm dev
+```
 
-To use a specific context:
-1. Add the context and tool manifest files to the `server/assets` directory
-2. Configure the environment variables in your `.env` file:
-   ```bash
-   LLM_CONTEXT=YourContext.md
-   LLM_MANIFEST=YourToolManifest.json
-   ```
+5. **Expose via ngrok**:
+```bash
+ngrok http --domain your-domain.ngrok.dev 3001
+```
 
-If these variables are not set, the system defaults to:
-- `defaultContext.md`
-- `defaultToolManifest.json`
+6. **Configure Twilio webhook**:
+- Set your phone number webhook to: `https://your-domain.ngrok.dev/connectConversationRelay`
 
-This approach allows you to:
-- Support multiple use cases with different requirements
-- Maintain separation of concerns between different contexts
-- Easily add new contexts and tool sets
-- Switch contexts by updating environment variables
+## Security Architecture
+
+The bot implements multiple security layers:
+
+### 1. **Mandatory Verification**
+- All ServiceNow write operations require prior OTP verification
+- Verification status is tracked per session
+- Cannot be bypassed through conversation
+
+### 2. **Secure Credential Management**
+- ServiceNow credentials stored as environment variables
+- Basic authentication with Base64 encoding
+- No credentials exposed in logs
+
+### 3. **Session Isolation**
+- Each call maintains its own session state
+- No cross-contamination between concurrent calls
+- Automatic cleanup on disconnect
+
+### 4. **Data Flow Security**
+- Customer sys_id required for ticket creation (no arbitrary caller assignment)
+- Verification state validated before sensitive operations
+- Comprehensive error handling and logging
+
+## ServiceNow Configuration
+
+### Required ServiceNow Setup
+
+1. **API Access**:
+   - Enable REST API access for the incident table
+   - Create a service account with appropriate roles:
+     - `itil` role for incident management
+     - `rest_api_explorer` for API access
+
+2. **Custom Fields** (if applicable):
+   - Ensure `close_code` field is configured
+   - Set up resolution code choices
+
+3. **Data Policies**:
+   - Configure mandatory fields for state transitions
+   - Set up resolution requirements for closed/resolved states
+
+### Testing ServiceNow Integration
+
+Test scripts are provided in the server directory:
+
+```bash
+# Test customer lookup
+node test-customer-lookup.js
+
+# Test ServiceNow connection
+node test-servicenow.js
+```
 
 ## Fly.io Deployment
 
@@ -735,14 +859,14 @@ class ResponseService extends EventEmitter {
 
 **Implementation Differences:**
 
-| Aspect | Boolean Flag | AbortController |
-|--------|-------------|-----------------|
-| **API Integration** | Manual checking in loops | Native support in fetch/HTTP APIs |
-| **Resource Cleanup** | Manual cleanup required | Automatic when signal aborted |
-| **Performance** | Polling overhead | Event-driven, no polling |
-| **Timing** | Checked at loop iterations | Immediate cancellation possible |
-| **Standards** | Custom implementation | Web/Node.js standard |
-| **Error Handling** | Manual error states | Built-in AbortError handling |
+| Aspect               | Boolean Flag               | AbortController                   |
+| -------------------- | -------------------------- | --------------------------------- |
+| **API Integration**  | Manual checking in loops   | Native support in fetch/HTTP APIs |
+| **Resource Cleanup** | Manual cleanup required    | Automatic when signal aborted     |
+| **Performance**      | Polling overhead           | Event-driven, no polling          |
+| **Timing**           | Checked at loop iterations | Immediate cancellation possible   |
+| **Standards**        | Custom implementation      | Web/Node.js standard              |
+| **Error Handling**   | Manual error states        | Built-in AbortError handling      |
 
 ### Performance Considerations
 
