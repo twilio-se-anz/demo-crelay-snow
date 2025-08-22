@@ -92,14 +92,11 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
      */
     private constructor(responseService: ResponseService, sessionData: SessionData) {
         super();
-        if (!responseService) {
-            throw new Error('LLM service is required');
-        }
         this.responseService = responseService;
         this.sessionData = sessionData;
         this.silenceHandler = new SilenceHandler();
         this.logMessage = null;     // Utility log message
-        this.accumulatedTokens = '';
+        this.accumulatedTokens = '';// Utility to show tokens as a Message in logging
 
         // Set up response handler for LLM responses. These are proxied to separate from Web Server
         this.responseService.on('responseService.content', (response) => {
@@ -145,26 +142,31 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
         callSid?: string
     ): Promise<ConversationRelayService> {
         logOut('Conversation Relay', 'Creating OpenAI Response Service');
-        const responseService = await OpenAIService.create(contextFile, toolManifestFile);
+        try {
+            const responseService = await OpenAIService.create(contextFile, toolManifestFile);
 
-        // Add call SID event listener if provided
-        if (callSid) {
-            responseService.on(`responseService.${callSid}`, (responseMessage: any) => {
-                logOut('Conversation Relay', `Got a call SID event for the response service: ${JSON.stringify(responseMessage)}`);
-                // This will be handled by the instance, but we set up the listener here
-            });
+            // Add call SID event listener if provided
+            if (callSid) {
+                responseService.on(`responseService.${callSid}`, (responseMessage: any) => {
+                    logOut('Conversation Relay', `Got a call SID event for the response service: ${JSON.stringify(responseMessage)}`);
+                    // This will be handled by the instance, but we set up the listener here
+                });
+            }
+
+            const instance = new ConversationRelayService(responseService, sessionData);
+
+            // Set up call SID event forwarding if provided
+            if (callSid) {
+                responseService.on(`responseService.${callSid}`, (responseMessage: any) => {
+                    instance.emit(`conversationRelay.${callSid}`, responseMessage);
+                });
+            }
+
+            return instance;
+        } catch (error) {
+            logError('Conversation Relay', `Could not create the Response Service: Error: ${error}`);
+            throw new Error('LLM service is required');
         }
-
-        const instance = new ConversationRelayService(responseService, sessionData);
-
-        // Set up call SID event forwarding if provided
-        if (callSid) {
-            responseService.on(`responseService.${callSid}`, (responseMessage: any) => {
-                instance.emit(`conversationRelay.${callSid}`, responseMessage);
-            });
-        }
-
-        return instance;
     }
 
     /**
