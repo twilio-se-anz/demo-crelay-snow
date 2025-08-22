@@ -29,6 +29,12 @@
 - **Separation of Concerns**: Clear distinction between `outgoingMessage()` for Twilio commands and `insertMessage()` for conversation context
 - **Removed Any Types**: Replaced `any` type annotations with proper `OutgoingMessage` types in WebSocket event handlers
 
+#### Interface Naming Refactoring
+- **Resolved Naming Conflicts**: Renamed `ConversationRelayService.d.ts` to `ConversationRelay.d.ts` to eliminate naming conflicts between interface and class
+- **Interface Renaming**: Updated interface name from `ConversationRelayService` to `ConversationRelay` for better separation
+- **Import Updates**: Updated all import statements to use the new file name and removed unnecessary aliasing (`as IConversationRelayService`)
+- **Type Safety Improvements**: Eliminated TypeScript compilation errors caused by naming conflicts
+
 ### Benefits
 - **Single Responsibility**: ConversationRelayService now manages all LLM service interactions
 - **Improved Maintainability**: Clear separation between WebSocket handling and conversation management
@@ -36,6 +42,7 @@
 - **Consistent API**: Uniform access to response service functionality through proxy methods
 - **Enhanced Type Safety**: Comprehensive TypeScript interfaces ensure compile-time validation of all Twilio WebSocket messages
 - **Better Developer Experience**: IntelliSense support and type checking for all outgoing message structures
+- **Cleaner Interface Separation**: Clear distinction between interface definitions and class implementations
 
 This refactoring provides better code organization and maintainability while maintaining full backward compatibility.
 

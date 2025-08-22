@@ -14,7 +14,7 @@ import { logOut, logError } from './utils/logger.js';
 // Import the services
 import { ConversationRelayService } from './services/ConversationRelayService.js'
 import { TwilioService } from './services/TwilioService.js';
-import type { IncomingMessage, OutgoingMessage, SessionData } from './interfaces/ConversationRelayService.js';
+import type { IncomingMessage, OutgoingMessage, SessionData } from './interfaces/ConversationRelay.js';
 
 
 

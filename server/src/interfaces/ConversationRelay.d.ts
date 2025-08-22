@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import { ResponseService } from '../interfaces/ResponseService.js';
 
 /**
  * Interface for session data
@@ -139,7 +138,7 @@ export type OutgoingMessage = TextTokensMessage | PlayMediaMessage | SendDigitsM
 /**
  * ConversationRelayService - manages conversation relay between users and an LLM service
  */
-export interface ConversationRelayService extends EventEmitter {
+export interface ConversationRelay extends EventEmitter {
 
     /**
      * Initializes a new conversation relay session
@@ -175,7 +174,7 @@ export interface ConversationRelayService extends EventEmitter {
 /**
  * ConversationRelayService class declaration
  */
-export declare class ConversationRelayService extends EventEmitter implements ConversationRelayService {
+export declare class ConversationRelayService extends EventEmitter implements ConversationRelay {
     static create(
         sessionData: SessionData,
         contextFile: string,

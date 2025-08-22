@@ -73,9 +73,9 @@ import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
 import { ResponseService } from '../interfaces/ResponseService.js';
 import { OpenAIService } from './OpenAIService.js';
-import type { SessionData, IncomingMessage, OutgoingMessage, ConversationRelayService as IConversationRelayService } from '../interfaces/ConversationRelayService.js';
+import type { SessionData, IncomingMessage, OutgoingMessage, ConversationRelay } from '../interfaces/ConversationRelay.js';
 
-class ConversationRelayService extends EventEmitter implements IConversationRelayService {
+class ConversationRelayService extends EventEmitter implements ConversationRelay {
     private responseService: ResponseService;
     private sessionData: SessionData;
     private silenceHandler: SilenceHandler | null;
@@ -139,8 +139,8 @@ class ConversationRelayService extends EventEmitter implements IConversationRela
      * @returns {Promise<ConversationRelayService>} Initialized service instance
      */
     static async create(
-        sessionData: SessionData, 
-        contextFile: string, 
+        sessionData: SessionData,
+        contextFile: string,
         toolManifestFile: string,
         callSid?: string
     ): Promise<ConversationRelayService> {
@@ -156,7 +156,7 @@ class ConversationRelayService extends EventEmitter implements IConversationRela
         }
 
         const instance = new ConversationRelayService(responseService, sessionData);
-        
+
         // Set up call SID event forwarding if provided
         if (callSid) {
             responseService.on(`responseService.${callSid}`, (responseMessage: any) => {

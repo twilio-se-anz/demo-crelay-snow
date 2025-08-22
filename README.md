@@ -4,7 +4,7 @@ This is a reference implementation aimed at introducing the key concepts of Conv
 
 ## Release v4.1
 
-This release introduces service architecture refactoring that moves all OpenAI service management into ConversationRelayService, providing better encapsulation and cleaner separation of concerns. The server.ts file is now focused purely on WebSocket/HTTP handling. Additionally, comprehensive TypeScript interface enforcement has been implemented for all Twilio WebSocket outgoing messages, enhancing type safety and developer experience. Variable naming has been standardized for consistency throughout the codebase. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
+This release introduces service architecture refactoring that moves all OpenAI service management into ConversationRelayService, providing better encapsulation and cleaner separation of concerns. The server.ts file is now focused purely on WebSocket/HTTP handling. Additionally, comprehensive TypeScript interface enforcement has been implemented for all Twilio WebSocket outgoing messages, enhancing type safety and developer experience. Variable naming has been standardized for consistency throughout the codebase. Interface naming conflicts have been resolved by renaming `ConversationRelayService.d.ts` to `ConversationRelay.d.ts` and updating the interface name to eliminate TypeScript compilation errors. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
 
 ## Quick Tip
 Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
@@ -54,7 +54,7 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 │   │   ├── server.ts     # Main server implementation
 │   │   ├── interfaces/   # TypeScript interface definitions
 │   │   │   ├── ResponseService.d.ts # ResponseService interface contract
-│   │   │   └── ConversationRelayService.d.ts # Conversation Relay interfaces with Twilio message types
+│   │   │   └── ConversationRelay.d.ts # Conversation Relay interfaces with Twilio message types
 │   │   ├── services/     # Core service implementations
 │   │   │   ├── ConversationRelayService.ts
 │   │   │   ├── OpenAIService.ts # Implements ResponseService interface
