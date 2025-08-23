@@ -6,14 +6,19 @@
  * Currently contains stub implementations with logging for development purposes.
  */
 
-import { EventEmitter } from 'events';
 import { logOut, logError } from '../utils/logger.js';
 import { ResponseService, ContentResponse, ToolResult, ToolResultEvent } from '../interfaces/ResponseService.js';
 
-class FlowiseResponseService extends EventEmitter implements ResponseService {
+class FlowiseResponseService implements ResponseService {
     private contextFile: string;
     private toolManifestFile: string;
     private isInterrupted: boolean;
+
+    // Handler functions
+    private contentHandler?: (response: ContentResponse) => void;
+    private toolResultHandler?: (toolResult: ToolResultEvent) => void;
+    private errorHandler?: (error: Error) => void;
+    private callSidHandler?: (callSid: string, responseMessage: any) => void;
 
     /**
      * Private constructor for FlowiseResponseService instance.
@@ -21,7 +26,6 @@ class FlowiseResponseService extends EventEmitter implements ResponseService {
      * Use the static create() method for proper async initialization.
      */
     private constructor() {
-        super();
         this.contextFile = '';
         this.toolManifestFile = '';
         this.isInterrupted = false;
@@ -43,6 +47,34 @@ class FlowiseResponseService extends EventEmitter implements ResponseService {
     }
 
     /**
+     * Sets the content handler for response chunks
+     */
+    setContentHandler(handler: (response: ContentResponse) => void): void {
+        this.contentHandler = handler;
+    }
+
+    /**
+     * Sets the tool result handler for tool execution results
+     */
+    setToolResultHandler(handler: (toolResult: ToolResultEvent) => void): void {
+        this.toolResultHandler = handler;
+    }
+
+    /**
+     * Sets the error handler for error events
+     */
+    setErrorHandler(handler: (error: Error) => void): void {
+        this.errorHandler = handler;
+    }
+
+    /**
+     * Sets the call SID handler for call-specific events
+     */
+    setCallSidHandler(handler: (callSid: string, responseMessage: any) => void): void {
+        this.callSidHandler = handler;
+    }
+
+    /**
      * Generates a streaming response from the Flowise service
      * 
      * @param role - Message role ('user' or 'system')
@@ -57,8 +89,8 @@ class FlowiseResponseService extends EventEmitter implements ResponseService {
             logOut('FlowiseResponseService', `generateResponse called with role: ${role}, prompt length: ${prompt.length}`);
 
             // TODO: Implement actual Flowise API integration
-            // For now, emit a stub response
-            this.emit('responseService.content', {
+            // For now, call handler with a stub response
+            this.contentHandler?.({
                 type: 'text',
                 token: '[FlowiseResponseService Stub Response]',
                 last: true
@@ -67,7 +99,7 @@ class FlowiseResponseService extends EventEmitter implements ResponseService {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             logError('FlowiseResponseService', `Error in generateResponse: ${errorMessage}`);
-            this.emit('responseService.error', error);
+            this.errorHandler?.(error as Error);
         }
     }
 
@@ -134,11 +166,15 @@ class FlowiseResponseService extends EventEmitter implements ResponseService {
 
     /**
      * Performs cleanup of service resources
-     * Removes event listeners and cleans up any active connections
+     * Clears handlers and cleans up any active connections
      */
     cleanup(): void {
         logOut('FlowiseResponseService', 'Cleaning up service resources');
-        this.removeAllListeners();
+        // Clear handlers instead of removing listeners
+        this.contentHandler = undefined;
+        this.toolResultHandler = undefined;
+        this.errorHandler = undefined;
+        this.callSidHandler = undefined;
         this.isInterrupted = true;
         // TODO: Implement cleanup of any Flowise connections or resources
     }

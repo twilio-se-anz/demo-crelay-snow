@@ -3,8 +3,6 @@
  * Defines the contract that all LLM services must implement for conversation handling
  */
 
-import { EventEmitter } from 'events';
-
 /**
  * Interface for content response chunks
  */
@@ -33,23 +31,22 @@ export interface ToolResult {
 
 /**
  * Interface that all Response Service implementations must follow
- * Extends EventEmitter to provide standardized event handling
- * 
- * Standard Events Emitted:
- * - 'responseService.content': ContentResponse chunks during streaming
- * - 'responseService.toolResult': ToolResultEvent when tools execute
- * - 'responseService.error': Error events during processing
+ * Uses dependency injection with handler functions for better type safety
  */
-export interface ResponseService extends EventEmitter {
+export interface ResponseService {
+    /**
+     * Handler setters - called once during setup to register event handlers
+     */
+    setContentHandler(handler: (response: ContentResponse) => void): void;
+    setToolResultHandler(handler: (toolResult: ToolResultEvent) => void): void;
+    setErrorHandler(handler: (error: Error) => void): void;
+    setCallSidHandler(handler: (callSid: string, responseMessage: any) => void): void;
     /**
      * Generates a streaming response from the LLM service
      * 
      * @param role - Message role ('user' or 'system')
      * @param prompt - Input message content
      * @returns Promise that resolves when response generation starts
-     * @emits responseService.content - Response chunks during streaming
-     * @emits responseService.toolResult - Tool execution results
-     * @emits responseService.error - Error events
      */
     generateResponse(role: 'user' | 'system', prompt: string): Promise<void>;
 
@@ -86,7 +83,7 @@ export interface ResponseService extends EventEmitter {
 
     /**
      * Performs cleanup of service resources
-     * Removes event listeners and cleans up any active connections
+     * Clears handlers and cleans up any active connections
      */
     cleanup(): void;
 }

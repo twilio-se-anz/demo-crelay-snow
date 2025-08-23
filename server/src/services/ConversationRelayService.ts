@@ -98,8 +98,8 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
         this.logMessage = null;     // Utility log message
         this.accumulatedTokens = '';// Utility to show tokens as a Message in logging
 
-        // Set up response handler for LLM responses. These are proxied to separate from Web Server
-        this.responseService.on('responseService.content', (response) => {
+        // Set up response handlers for LLM responses using dependency injection
+        this.responseService.setContentHandler((response) => {
             if (!response.last) {
                 // Accumulate tokens while last is false
                 this.accumulatedTokens += response.token || '';
@@ -114,13 +114,19 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
         });
 
         // Check the tool call result if for CR specific tool calls, as these need to be sent to the WS server
-        this.responseService.on('responseService.toolResult', (toolResult) => {
+        this.responseService.setToolResultHandler((toolResult) => {
             logOut(`Conversation Relay`, `Tool result received: ${JSON.stringify(toolResult)}`);
             // Check if the tool result is for the conversation relay
             if (toolResult.toolType === "crelay") {
                 // Send the tool result to the WS server
                 this.emit('conversationRelay.outgoingMessage', toolResult.toolData);
             }
+        });
+
+        // Set up error handler for ResponseService errors
+        this.responseService.setErrorHandler((error) => {
+            logError(`Conversation Relay`, `ResponseService error: ${error.message}`);
+            // Could emit an error event or handle it appropriately
         });
         logOut(`Conversation Relay`, `Service constructed`);
     }
@@ -145,20 +151,13 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
         try {
             const responseService = await OpenAIResponseService.create(contextFile, toolManifestFile);
 
-            // Add call SID event listener if provided
-            if (callSid) {
-                responseService.on(`responseService.${callSid}`, (responseMessage: any) => {
-                    logOut('Conversation Relay', `Got a call SID event for the response service: ${JSON.stringify(responseMessage)}`);
-                    // This will be handled by the instance, but we set up the listener here
-                });
-            }
-
             const instance = new ConversationRelayService(responseService, sessionData);
 
-            // Set up call SID event forwarding if provided
+            // Set up call SID handler if provided
             if (callSid) {
-                responseService.on(`responseService.${callSid}`, (responseMessage: any) => {
-                    instance.emit(`conversationRelay.${callSid}`, responseMessage);
+                responseService.setCallSidHandler((receivedCallSid: string, responseMessage: any) => {
+                    logOut('Conversation Relay', `Got a call SID event: ${receivedCallSid}, ${JSON.stringify(responseMessage)}`);
+                    instance.emit(`conversationRelay.${receivedCallSid}`, responseMessage);
                 });
             }
 

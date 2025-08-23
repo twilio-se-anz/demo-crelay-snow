@@ -13,10 +13,10 @@
  *    - Executes tool calls
  *    - Handles tool responses
  * 
- * 3. Event Management:
- *    - Emits content events for responses
- *    - Emits tool result events
- *    - Handles errors and interruptions
+ * 3. Handler Management:
+ *    - Uses dependency injection for response handlers
+ *    - Calls content handlers for responses
+ *    - Calls tool result and error handlers
  * 
  * 4. Interrupt Handling:
  *    - Provides methods to interrupt ongoing responses
@@ -33,7 +33,6 @@
  * to work correctly.
  * 
  * @class
- * @extends EventEmitter
  * @property {OpenAI} openai - OpenAI API client instance
  * @property {string} model - Model to use (from environment variables)
  * @property {string} currentResponseId - Current response ID for conversation continuity
@@ -43,13 +42,12 @@
  * @property {Object} loadedTools - Map of loaded tool functions
  * @property {Array} inputMessages - Message history for Responses API
  * 
- * Events Emitted:
- * - responseService.content: Response content chunks
- * - responseService.toolResult: Results from tool executions
- * - responseService.error: Error events
+ * Handler Functions Called:
+ * - contentHandler: Response content chunks
+ * - toolResultHandler: Results from tool executions  
+ * - errorHandler: Error events
  */
 
-import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -93,7 +91,7 @@ interface ResponsesAPIToolCall {
 }
 
 
-class OpenAIResponseService extends EventEmitter implements ResponseService {
+class OpenAIResponseService implements ResponseService {
     protected openai: OpenAI;
     protected model: string;
     protected currentResponseId: string | null;
@@ -104,13 +102,18 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
     protected loadedTools: Record<string, ToolFunction>;
     protected inputMessages: ResponseInput;
 
+    // Handler functions
+    private contentHandler?: (response: ContentResponse) => void;
+    private toolResultHandler?: (toolResult: ToolResultEvent) => void;
+    private errorHandler?: (error: Error) => void;
+    private callSidHandler?: (callSid: string, responseMessage: any) => void;
+
     /**
      * Private constructor for ResponseService instance.
      * Initializes client and sets up initial state with synchronous operations only.
      * Use the static create() method for proper async initialization.
      */
     private constructor() {
-        super();
         this.openai = new OpenAI();
         this.model = process.env.OPENAI_MODEL || "gpt-4o";
         this.currentResponseId = null;
@@ -139,12 +142,34 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
     }
 
     /**
+     * Sets the content, result and error handlers
+     */
+    setContentHandler(handler: (response: ContentResponse) => void): void {
+        this.contentHandler = handler;
+    }
+
+    setToolResultHandler(handler: (toolResult: ToolResultEvent) => void): void {
+        this.toolResultHandler = handler;
+    }
+
+    setErrorHandler(handler: (error: Error) => void): void {
+        this.errorHandler = handler;
+    }
+
+    /**
+     * Sets the call SID handler for call-specific events
+     */
+    setCallSidHandler(handler: (callSid: string, responseMessage: any) => void): void {
+        this.callSidHandler = handler;
+    }
+
+    /**
      * Creates a ToolEvent object that tools can use to emit events
      */
     private createToolEvent(): ToolEvent {
         return {
             emit: (eventType: string, data: any) => {
-                this.emit('responseService.toolResult', {
+                this.toolResultHandler?.({
                     toolType: eventType,
                     toolData: data
                 } as ToolResultEvent);
@@ -337,11 +362,14 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
 
     /**
      * Performs cleanup of service resources.
-     * Removes all event listeners to prevent memory leaks.
+     * Clears handlers to prevent memory leaks.
      */
     cleanup(): void {
-        // Remove all event listeners
-        this.removeAllListeners();
+        // Clear handlers instead of removing listeners
+        this.contentHandler = undefined;
+        this.toolResultHandler = undefined;
+        this.errorHandler = undefined;
+        this.callSidHandler = undefined;
     }
 
     /**
@@ -365,7 +393,7 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
                     // Text content streaming
                     const content = eventData.delta || '';
                     if (content) {
-                        this.emit('responseService.content', {
+                        this.contentHandler?.({
                             type: "text",
                             token: content,
                             last: false
@@ -445,7 +473,7 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
                     // Only emit final content marker if this is the end of the conversation
                     // (not if we're about to create a follow-up for tool results)
                     if (!currentToolCall) {
-                        this.emit('responseService.content', {
+                        this.contentHandler?.({
                             type: "text",
                             token: '',
                             last: true
@@ -532,7 +560,7 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
             await this.processStream(stream);
 
         } catch (error) {
-            this.emit('responseService.error', error);
+            this.errorHandler?.(error as Error);
             throw error;
         }
     }
