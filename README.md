@@ -2,9 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v4.1
+## Release v4.1.1
 
-This release introduces service architecture refactoring that moves all OpenAI service management into ConversationRelayService, providing better encapsulation and cleaner separation of concerns. The server.ts file is now focused purely on WebSocket/HTTP handling. Additionally, comprehensive TypeScript interface enforcement has been implemented for all Twilio WebSocket outgoing messages, enhancing type safety and developer experience. Variable naming has been standardized for consistency throughout the codebase. Interface naming conflicts have been resolved by renaming `ConversationRelayService.d.ts` to `ConversationRelay.d.ts` and updating the interface name to eliminate TypeScript compilation errors. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
+This release introduces service renaming that implements the Dependency Inversion pattern for better architectural flexibility. The OpenAIService has been renamed to OpenAIResponseService to better reflect its role as a specific implementation of the ResponseService interface. This change enables the system to support multiple LLM backends by implementing the `server/src/interfaces/ResponseService.d.ts` interface, removing the dependency on specific LLM backend methods directly in `ConversationRelayService.ts`. The ConversationRelayService now depends on the ResponseService abstraction rather than concrete OpenAI implementations, making it easier to add support for other LLM providers like Claude, Gemini, or custom services. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
 
 ## Quick Tip
 Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
@@ -57,7 +57,7 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 │   │   │   └── ConversationRelay.d.ts # Conversation Relay interfaces with Twilio message types
 │   │   ├── services/     # Core service implementations
 │   │   │   ├── ConversationRelayService.ts
-│   │   │   ├── OpenAIService.ts # Implements ResponseService interface
+│   │   │   ├── OpenAIResponseService.ts # Implements ResponseService interface
 │   │   │   ├── SilenceHandler.ts
 │   │   │   └── TwilioService.ts
 │   │   ├── tools/        # Tool implementations
@@ -663,7 +663,7 @@ The server is organized into modular services:
    - Handles WebSocket communication
    - Coordinates between different services
 
-2. `OpenAIService`
+2. `OpenAIResponseService`
    - Implements the ResponseService interface for OpenAI integration
    - Uses factory pattern for proper async initialization
    - Manages GPT integration via OpenAI's Response API

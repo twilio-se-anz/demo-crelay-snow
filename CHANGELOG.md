@@ -1,5 +1,29 @@
 # Changelog
 
+## Release v4.1.1
+
+### Service Naming Refactoring
+
+#### OpenAI Service Renaming
+- **Service Clarity**: Renamed `OpenAIService` to `OpenAIResponseService` for better clarity and consistency
+- **File Renaming**: Updated `OpenAIService.ts` to `OpenAIResponseService.ts` in the services directory
+- **Import Updates**: Updated all import statements throughout the codebase to reference the new service name
+- **Class References**: Updated all class instantiations and references from `OpenAIService` to `OpenAIResponseService`
+- **Logging Updates**: Updated all logging messages to use the new service name for consistency
+
+#### Documentation Updates
+- **README.md**: Updated service references and project structure documentation to reflect the new naming
+- **CHANGELOG.md**: Added comprehensive release notes for the renaming refactoring
+- **Version Bump**: Updated package.json version to 4.1.1
+
+### Benefits
+- **Improved Clarity**: The new name better reflects the service's role as a response service implementation
+- **Consistent Naming**: Aligns with the service architecture patterns established in previous releases
+- **Better Code Readability**: More descriptive class names improve code understanding
+- **Maintainability**: Consistent naming conventions across the codebase
+
+This refactoring maintains full backward compatibility while improving code clarity and consistency with established naming patterns.
+
 ## Release v4.1.0
 
 ### Service Architecture Refactoring

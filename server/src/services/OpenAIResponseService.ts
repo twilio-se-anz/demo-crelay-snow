@@ -93,7 +93,7 @@ interface ResponsesAPIToolCall {
 }
 
 
-class OpenAIService extends EventEmitter implements ResponseService {
+class OpenAIResponseService extends EventEmitter implements ResponseService {
     protected openai: OpenAI;
     protected model: string;
     protected currentResponseId: string | null;
@@ -128,11 +128,11 @@ class OpenAIService extends EventEmitter implements ResponseService {
      * 
      * @param {string} contextFile - Path to the context.md file
      * @param {string} toolManifestFile - Path to the toolManifest.json file
-     * @returns {Promise<OpenAIService>} Fully initialized service instance
+     * @returns {Promise<OpenAIResponseService>} Fully initialized service instance
      * @throws {Error} If tool loading fails
      */
-    static async create(contextFile: string, toolManifestFile: string): Promise<OpenAIService> {
-        const service = new OpenAIService();
+    static async create(contextFile: string, toolManifestFile: string): Promise<OpenAIResponseService> {
+        const service = new OpenAIResponseService();
         await service.updateContextAndManifest(contextFile, toolManifestFile);
         return service;
     }
@@ -172,7 +172,7 @@ class OpenAIService extends EventEmitter implements ResponseService {
 
             return toolResponse;
         } catch (error) {
-            logError('OpenAIService', `Tool call failed: ${tool.name} with arguments: ${tool.arguments}`);
+            logError('OpenAIResponseService', `Tool call failed: ${tool.name} with arguments: ${tool.arguments}`);
             return null;
         }
     }
@@ -193,7 +193,7 @@ class OpenAIService extends EventEmitter implements ResponseService {
     clearMessages(): void {
         this.currentResponseId = null;
         this.inputMessages = [];
-        logOut('OpenAIService', 'Cleared conversation history - will start new thread');
+        logOut('OpenAIResponseService', 'Cleared conversation history - will start new thread');
     }
 
     /**
@@ -252,11 +252,11 @@ class OpenAIService extends EventEmitter implements ResponseService {
                     });
                     break;
                 default:
-                    logError('OpenAIService', `Unknown role: ${role}`);
+                    logError('OpenAIResponseService', `Unknown role: ${role}`);
                     break;
             }
         } catch (error) {
-            logError('OpenAIService', `Error inserting message into context: ${error instanceof Error ? error.message : String(error)}`);
+            logError('OpenAIResponseService', `Error inserting message into context: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -290,7 +290,7 @@ class OpenAIService extends EventEmitter implements ResponseService {
             this.toolDefinitions = toolManifest.tools;
             this.loadedTools = {};
 
-            logOut('OpenAIService', `Reloading tools...`);
+            logOut('OpenAIResponseService', `Reloading tools...`);
             for (const tool of this.toolDefinitions) {
                 if (tool.type === 'function') {
                     let functionName = tool.function?.name || tool.name;
@@ -299,16 +299,16 @@ class OpenAIService extends EventEmitter implements ResponseService {
                         const toolsDir = path.join(__dirname, '..', 'tools');
                         const toolModule = await import(path.join(toolsDir, `${functionName}.js`));
                         this.loadedTools[functionName] = toolModule.default;
-                        logOut('OpenAIService', `Loaded function: ${functionName}`);
+                        logOut('OpenAIResponseService', `Loaded function: ${functionName}`);
                     } catch (error) {
-                        logError('OpenAIService', `Error loading tool ${functionName}: ${error instanceof Error ? error.message : String(error)}`);
+                        logError('OpenAIResponseService', `Error loading tool ${functionName}: ${error instanceof Error ? error.message : String(error)}`);
                     }
                 }
             }
-            logOut('OpenAIService', `Loaded ${Object.keys(this.loadedTools).length} tools`);
+            logOut('OpenAIResponseService', `Loaded ${Object.keys(this.loadedTools).length} tools`);
 
         } catch (error) {
-            logError('OpenAIService', `Error updating context. Please ensure the files are in the /assets directory: ${error instanceof Error ? error.message : String(error)}`);
+            logError('OpenAIResponseService', `Error updating context. Please ensure the files are in the /assets directory: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -406,15 +406,15 @@ class OpenAIService extends EventEmitter implements ResponseService {
                                 await this.processStream(followUpStream);
 
                             } else {
-                                logError('OpenAIService', `Tool execution returned null result`);
+                                logError('OpenAIResponseService', `Tool execution returned null result`);
                             }
                         } catch (error) {
-                            logError('OpenAIService', `Error executing tool ${currentToolCall.name}: ${error instanceof Error ? error.message : String(error)}`);
+                            logError('OpenAIResponseService', `Error executing tool ${currentToolCall.name}: ${error instanceof Error ? error.message : String(error)}`);
                         }
 
                         currentToolCall = null;
                     } else {
-                        logError('OpenAIService', `Function call completed but no currentToolCall available`);
+                        logError('OpenAIResponseService', `Function call completed but no currentToolCall available`);
                     }
                     break;
 
@@ -441,7 +441,7 @@ class OpenAIService extends EventEmitter implements ResponseService {
                     break;
                 default:
                     // Handle any unrecognized event types
-                    logOut('OpenAIService', `Unhandled event type: ${eventData.type}`);
+                    logOut('OpenAIResponseService', `Unhandled event type: ${eventData.type}`);
                     break;
             }
         }
@@ -516,4 +516,4 @@ class OpenAIService extends EventEmitter implements ResponseService {
     }
 }
 
-export { OpenAIService };
+export { OpenAIResponseService };

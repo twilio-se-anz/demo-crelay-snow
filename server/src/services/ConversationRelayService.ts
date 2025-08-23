@@ -72,7 +72,7 @@ import { EventEmitter } from 'events';
 import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
 import { ResponseService } from '../interfaces/ResponseService.js';
-import { OpenAIService } from './OpenAIService.js';
+import { OpenAIResponseService } from './OpenAIResponseService.js';
 import type { SessionData, IncomingMessage, OutgoingMessage, ConversationRelay } from '../interfaces/ConversationRelay.js';
 
 class ConversationRelayService extends EventEmitter implements ConversationRelay {
@@ -143,7 +143,7 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
     ): Promise<ConversationRelayService> {
         logOut('Conversation Relay', 'Creating OpenAI Response Service');
         try {
-            const responseService = await OpenAIService.create(contextFile, toolManifestFile);
+            const responseService = await OpenAIResponseService.create(contextFile, toolManifestFile);
 
             // Add call SID event listener if provided
             if (callSid) {
