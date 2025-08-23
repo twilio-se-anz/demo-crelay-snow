@@ -1,5 +1,43 @@
 # Changelog
 
+## Release v4.1.2
+
+### Interface Method Splitting
+
+#### ResponseService Interface Enhancement
+- **Method Separation**: Split `updateContextAndManifest(contextFile: string, toolManifestFile: string)` into two separate methods:
+  - `updateContext(contextFile: string): Promise<void>` - Updates only the context file
+  - `updateTools(toolManifestFile: string): Promise<void>` - Updates only the tool manifest file
+- **Better Separation of Concerns**: Each method now has a single, clear responsibility
+- **Granular Control**: Applications can now update context or tools independently as needed
+
+#### ConversationRelay Interface Enhancement
+- **Consistent API**: Applied the same method splitting to the ConversationRelay interface
+- **Interface Alignment**: Both ResponseService and ConversationRelay interfaces now have matching method signatures
+- **Type Safety**: Updated interface declarations in both interface and class definitions
+
+#### Implementation Updates
+- **OpenAIResponseService**: Split the complex `updateContextAndManifest()` implementation into:
+  - `updateContext()` - Handles context file loading, instruction updates, and conversation reset
+  - `updateTools()` - Handles tool manifest loading and dynamic tool reloading
+- **FlowiseResponseService**: Updated stub implementation with separate methods
+- **ConversationRelayService**: Replaced single proxy method with two separate proxy methods
+- **Server.ts**: Updated call site to use both methods sequentially
+
+#### Factory Method Updates
+- **OpenAIResponseService.create()**: Now calls both `updateContext()` and `updateTools()` separately
+- **FlowiseResponseService.create()**: Updated to use the new method signatures
+- **Backward Compatibility**: All existing functionality is preserved
+
+### Benefits
+- **Single Responsibility Principle**: Each method focuses on one specific update operation
+- **Improved Flexibility**: Context and tools can be updated independently
+- **Better Code Organization**: Clearer separation between context and tool management
+- **Enhanced Maintainability**: Easier to test and modify individual components
+- **Consistent API Design**: Uniform method signatures across all service interfaces
+
+This refactoring maintains full backward compatibility while providing more granular control over service configuration updates.
+
 ## Release v4.1.1
 
 ### Service Naming Refactoring

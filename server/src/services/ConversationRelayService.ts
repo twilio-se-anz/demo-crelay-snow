@@ -293,14 +293,23 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
     }
 
     /**
-     * Updates the context and manifest files for the response service.
+     * Updates the context file for the response service.
      * Proxy method for direct access to response service functionality.
      * 
      * @param {string} contextFile - New context file path
+     */
+    async updateContext(contextFile: string): Promise<void> {
+        await this.responseService.updateContext(contextFile);
+    }
+
+    /**
+     * Updates the tool manifest file for the response service.
+     * Proxy method for direct access to response service functionality.
+     * 
      * @param {string} toolManifestFile - New tool manifest file path
      */
-    async updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void> {
-        await this.responseService.updateContextAndManifest(contextFile, toolManifestFile);
+    async updateTools(toolManifestFile: string): Promise<void> {
+        await this.responseService.updateTools(toolManifestFile);
     }
 
     /**

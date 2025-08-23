@@ -133,7 +133,8 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
      */
     static async create(contextFile: string, toolManifestFile: string): Promise<OpenAIResponseService> {
         const service = new OpenAIResponseService();
-        await service.updateContextAndManifest(contextFile, toolManifestFile);
+        await service.updateContext(contextFile);
+        await service.updateTools(toolManifestFile);
         return service;
     }
 
@@ -261,29 +262,50 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
     }
 
     /**
-     * Updates the context and tool manifest files used by the service dynamically. The name passed in will be used to load the context and tool manifest files.
-     * The convention is that the context and manifest files will be stored in the assets directory.
+     * Updates the context file used by the service dynamically.
+     * The convention is that the context file will be stored in the assets directory.
      * 
      * @param {string} contextFile - Path to the new context.md file
-     * @param {string} toolManifestFile - Path to the new toolManifest.json file
      * @throws {Error} If file loading fails
      */
-    async updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void> {
-
+    async updateContext(contextFile: string): Promise<void> {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
 
         try {
-            // Load new context and tool manifest from provided file paths
+            // Load new context from provided file path
             const assetsDir = path.join(__dirname, '..', '..', 'assets');
             const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
-            const toolManifestPath = path.join(assetsDir, toolManifestFile);
-            const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: any[] };
 
             // Update instructions and reset conversation
             this.instructions = context;
             this.currentResponseId = null; // Reset conversation to use new context
             this.inputMessages = []; // Reset input messages
+
+            logOut('OpenAIResponseService', `Updated context file: ${contextFile}`);
+
+        } catch (error) {
+            logError('OpenAIResponseService', `Error updating context. Please ensure the file is in the /assets directory: ${error instanceof Error ? error.message : String(error)}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Updates the tool manifest file used by the service dynamically.
+     * The convention is that the manifest file will be stored in the assets directory.
+     * 
+     * @param {string} toolManifestFile - Path to the new toolManifest.json file
+     * @throws {Error} If file loading fails
+     */
+    async updateTools(toolManifestFile: string): Promise<void> {
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
+
+        try {
+            // Load new tool manifest from provided file path
+            const assetsDir = path.join(__dirname, '..', '..', 'assets');
+            const toolManifestPath = path.join(assetsDir, toolManifestFile);
+            const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: any[] };
 
             // Update tool definitions and reload tools
             this.toolManifest = toolManifest;
@@ -308,7 +330,7 @@ class OpenAIResponseService extends EventEmitter implements ResponseService {
             logOut('OpenAIResponseService', `Loaded ${Object.keys(this.loadedTools).length} tools`);
 
         } catch (error) {
-            logError('OpenAIResponseService', `Error updating context. Please ensure the files are in the /assets directory: ${error instanceof Error ? error.message : String(error)}`);
+            logError('OpenAIResponseService', `Error updating tools. Please ensure the file is in the /assets directory: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }

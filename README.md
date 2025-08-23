@@ -2,9 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v4.1.1
+## Release v4.1.2
 
-This release introduces service renaming that implements the Dependency Inversion pattern for better architectural flexibility. The OpenAIService has been renamed to OpenAIResponseService to better reflect its role as a specific implementation of the ResponseService interface. This change enables the system to support multiple LLM backends by implementing the `server/src/interfaces/ResponseService.d.ts` interface, removing the dependency on specific LLM backend methods directly in `ConversationRelayService.ts`. The ConversationRelayService now depends on the ResponseService abstraction rather than concrete OpenAI implementations, making it easier to add support for other LLM providers like Claude, Gemini, or custom services. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
+This release enhances the service architecture with better separation of concerns by splitting interface methods. The `updateContextAndManifest()` method has been split into two separate methods: `updateContext()` for context file updates and `updateTools()` for tool manifest updates. This change applies to both the ResponseService and ConversationRelay interfaces, providing more granular control over service configuration updates. The enhancement enables independent updates of context or tools, follows the single responsibility principle, and maintains full backward compatibility. This architectural improvement makes the system more flexible and maintainable. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
 
 ## Quick Tip
 Configure your Conversation Relay parameters in server/src/services/TwilioService.ts

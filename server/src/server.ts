@@ -329,7 +329,8 @@ app.post('/updateResponseService', async (req: express.Request, res: express.Res
         if (wsSession) {
             let conversationRelaySession = wsSession.conversationRelaySession;
             // Now update the context and manifest files for the sessionResponseService.
-            await conversationRelaySession.updateContextAndManifest(contextFile, toolManifestFile);
+            await conversationRelaySession.updateContext(contextFile);
+            await conversationRelaySession.updateTools(toolManifestFile);
         }
     }
 

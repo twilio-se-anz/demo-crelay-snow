@@ -36,7 +36,8 @@ class FlowiseResponseService extends EventEmitter implements ResponseService {
      */
     static async create(contextFile: string, toolManifestFile: string): Promise<FlowiseResponseService> {
         const service = new FlowiseResponseService();
-        await service.updateContextAndManifest(contextFile, toolManifestFile);
+        await service.updateContext(contextFile);
+        await service.updateTools(toolManifestFile);
         logOut('FlowiseResponseService', 'Service created and initialized');
         return service;
     }
@@ -98,21 +99,36 @@ class FlowiseResponseService extends EventEmitter implements ResponseService {
     }
 
     /**
-     * Updates the context and manifest files for the response service
+     * Updates the context file for the response service
      * 
      * @param contextFile - New context file path
-     * @param toolManifestFile - New tool manifest file path
      * @returns Promise that resolves when update is complete
      */
-    async updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void> {
+    async updateContext(contextFile: string): Promise<void> {
         try {
-            logOut('FlowiseResponseService', `Updating context file: ${contextFile}, tool manifest: ${toolManifestFile}`);
+            logOut('FlowiseResponseService', `Updating context file: ${contextFile}`);
             this.contextFile = contextFile;
-            this.toolManifestFile = toolManifestFile;
             // TODO: Implement actual file loading and context setup for Flowise
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            logError('FlowiseResponseService', `Error updating context and manifest: ${errorMessage}`);
+            logError('FlowiseResponseService', `Error updating context: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Updates the tool manifest file for the response service
+     * 
+     * @param toolManifestFile - New tool manifest file path
+     * @returns Promise that resolves when update is complete
+     */
+    async updateTools(toolManifestFile: string): Promise<void> {
+        try {
+            logOut('FlowiseResponseService', `Updating tool manifest: ${toolManifestFile}`);
+            this.toolManifestFile = toolManifestFile;
+            // TODO: Implement actual tool loading setup for Flowise
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logError('FlowiseResponseService', `Error updating tools: ${errorMessage}`);
         }
     }
 

@@ -161,9 +161,14 @@ export interface ConversationRelay extends EventEmitter {
     insertMessage(role: 'system' | 'user' | 'assistant', content: string): Promise<void>;
 
     /**
-     * Updates the context and manifest files for the response service
+     * Updates the context file for the response service
      */
-    updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void>;
+    updateContext(contextFile: string): Promise<void>;
+
+    /**
+     * Updates the tool manifest file for the response service
+     */
+    updateTools(toolManifestFile: string): Promise<void>;
 
     /**
      * Performs cleanup of service resources
@@ -186,6 +191,7 @@ export declare class ConversationRelayService extends EventEmitter implements Co
     incomingMessage(message: IncomingMessage): Promise<void>;
     outgoingMessage(message: OutgoingMessage): Promise<void>;
     insertMessage(role: 'system' | 'user' | 'assistant', content: string): Promise<void>;
-    updateContextAndManifest(contextFile: string, toolManifestFile: string): Promise<void>;
+    updateContext(contextFile: string): Promise<void>;
+    updateTools(toolManifestFile: string): Promise<void>;
     cleanup(): void;
 }
