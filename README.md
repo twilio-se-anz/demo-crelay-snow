@@ -2,9 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
 
-## Release v4.1.2
+## Release v4.2.0
 
-This release enhances the service architecture with better separation of concerns by splitting interface methods. The `updateContextAndManifest()` method has been split into two separate methods: `updateContext()` for context file updates and `updateTools()` for tool manifest updates. This change applies to both the ResponseService and ConversationRelay interfaces, providing more granular control over service configuration updates. The enhancement enables independent updates of context or tools, follows the single responsibility principle, and maintains full backward compatibility. This architectural improvement makes the system more flexible and maintainable. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
+This release introduces a major architectural improvement with the complete migration from EventEmitter-based communication to Dependency Injection pattern across all service layers. The system now uses strongly-typed handler functions instead of magic string events, providing enhanced type safety, better performance through direct function calls, and improved testability with easier mocking capabilities. This transformation maintains full backward compatibility while establishing a more robust foundation for future development. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
 
 ## Quick Tip
 Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
@@ -53,11 +53,12 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 │   ├── src/              # Source code directory
 │   │   ├── server.ts     # Main server implementation
 │   │   ├── interfaces/   # TypeScript interface definitions
-│   │   │   ├── ResponseService.d.ts # ResponseService interface contract
+│   │   │   ├── ResponseService.d.ts # ResponseService interface with DI handlers
 │   │   │   └── ConversationRelay.d.ts # Conversation Relay interfaces with Twilio message types
 │   │   ├── services/     # Core service implementations
-│   │   │   ├── ConversationRelayService.ts
-│   │   │   ├── OpenAIResponseService.ts # Implements ResponseService interface
+│   │   │   ├── ConversationRelayService.ts # Implements DI pattern
+│   │   │   ├── OpenAIResponseService.ts # Implements ResponseService interface with DI
+│   │   │   ├── FlowiseResponseService.ts # Alternative ResponseService implementation
 │   │   │   ├── SilenceHandler.ts
 │   │   │   └── TwilioService.ts
 │   │   ├── tools/        # Tool implementations
@@ -72,6 +73,201 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 ## Server Component
 
 The server handles WebSocket connections and manages conversation relay functionality. It includes GPT service integration for natural language processing and Twilio integration for voice call handling.
+
+## Dependency Injection Architecture
+
+### Overview of DI Implementation
+
+Version 4.2.0 introduces a comprehensive Dependency Injection architecture that replaces the previous EventEmitter-based communication pattern. This architectural transformation provides significant benefits in type safety, performance, and testability while maintaining full backward compatibility.
+
+### Core DI Components
+
+#### Handler Function Types
+
+The system defines strongly-typed handler functions organized by service interface:
+
+**ResponseService Handlers** (`server/src/interfaces/ResponseService.d.ts`):
+```typescript
+export type ContentHandler = (response: ContentResponse) => void;
+export type ToolResultHandler = (toolResult: ToolResultEvent) => void;
+export type ErrorHandler = (error: Error) => void;
+```
+
+**ConversationRelay Handlers** (`server/src/interfaces/ConversationRelay.d.ts`):
+```typescript
+export type OutgoingMessageHandler = (message: OutgoingMessage) => void;
+export type CallSidEventHandler = (callSid: string, responseMessage: any) => void;
+export type SilenceEventHandler = (message: OutgoingMessage) => void;
+```
+
+#### Service Interface Enhancement
+
+**ResponseService Interface** (`server/src/interfaces/ResponseService.d.ts`):
+```typescript
+export interface ResponseService {
+    // Handler setters - called once during setup
+    setContentHandler(handler: ContentHandler): void;
+    setToolResultHandler(handler: ToolResultHandler): void;
+    setErrorHandler(handler: ErrorHandler): void;
+    setCallSidHandler(handler: CallSidEventHandler): void;
+    
+    // Service methods
+    generateResponse(role: 'user' | 'system', prompt: string): Promise<void>;
+    insertMessage(role: 'system' | 'user' | 'assistant', message: string): Promise<void>;
+    // ... other methods
+}
+```
+
+**ConversationRelay Interface** (`server/src/interfaces/ConversationRelay.d.ts`):
+```typescript
+export interface ConversationRelay {
+    // Handler setters for service communication
+    setOutgoingMessageHandler(handler: OutgoingMessageHandler): void;
+    setCallSidEventHandler(handler: CallSidEventHandler): void;
+    setSilenceEventHandler(handler: SilenceEventHandler): void;
+    
+    // Service methods
+    setupMessage(sessionData: SessionData): Promise<void>;
+    incomingMessage(message: IncomingMessage): Promise<void>;
+    // ... other methods
+}
+```
+
+### DI Pattern Implementation
+
+#### Service-to-Service Communication
+
+**Before (EventEmitter Pattern):**
+```typescript
+// ResponseService emitting events
+this.emit('responseService.content', response);
+this.emit('responseService.toolResult', toolResult);
+this.emit('responseService.error', error);
+
+// ConversationRelayService listening to events
+responseService.on('responseService.content', (response) => {
+    this.emit('conversationRelay.outgoingMessage', response);
+});
+```
+
+**After (Dependency Injection Pattern):**
+```typescript
+// ResponseService using handlers
+this.contentHandler?.(response);
+this.toolResultHandler?.(toolResult);
+this.errorHandler?.(error);
+
+// ConversationRelayService setting up handlers
+responseService.setContentHandler((response) => {
+    const outgoingMessage = { type: 'text', token: response.token, last: response.last };
+    this.outgoingMessageHandler?.(outgoingMessage);
+});
+```
+
+#### WebSocket Server Integration
+
+**Before (Event-Driven Pattern):**
+```typescript
+conversationRelaySession.on('conversationRelay.outgoingMessage', (message) => {
+    ws.send(JSON.stringify(message));
+});
+```
+
+**After (Handler-Based Pattern):**
+```typescript
+conversationRelaySession.setOutgoingMessageHandler((message) => {
+    ws.send(JSON.stringify(message));
+});
+```
+
+### Benefits of Dependency Injection Architecture
+
+#### 🚀 Performance Advantages
+
+- **Direct Function Calls**: Eliminated EventEmitter dispatch overhead, reducing CPU usage and improving response times
+- **Reduced Memory Footprint**: No event listener registration/cleanup overhead or event queue management
+- **Optimized Call Stack**: Direct handler invocation without event system intermediation
+- **Lower Latency**: Immediate function calls vs. event loop scheduling
+
+#### 🛡️ Type Safety & Developer Experience
+
+- **Compile-Time Validation**: TypeScript enforces correct handler signatures, preventing runtime errors
+- **IntelliSense Support**: Full IDE autocompletion, parameter hints, and documentation for handler functions
+- **Elimination of Magic Strings**: No more `'responseService.content'` strings that can break silently during refactoring
+- **Interface Contracts**: Clear, enforceable contracts between services
+
+#### 🧪 Testing & Maintainability Benefits
+
+- **Easier Mocking**: Simple function mocking vs. complex EventEmitter testing scenarios
+- **Unit Test Isolation**: Individual handlers can be tested independently without event system complexity
+- **Dependency Clarity**: Explicit handler dependencies make service relationships transparent
+- **Better Debugging**: Direct call stacks make debugging significantly easier
+
+#### 🏗️ Architectural Improvements
+
+- **Single Responsibility**: Each handler focuses on one specific communication channel
+- **Interface Segregation**: Services only implement handlers they actually need
+- **Dependency Inversion**: Services depend on handler abstractions, not concrete implementations
+- **Better Separation of Concerns**: Clear distinction between service logic and communication mechanisms
+
+### Migration from EventEmitter Pattern
+
+#### Handler Registration Pattern
+
+**Service Setup:**
+```typescript
+// Create service instances
+const responseService = await OpenAIResponseService.create(contextFile, toolManifest);
+const conversationRelay = new ConversationRelayService(responseService, sessionData);
+
+// Set up handler chain
+responseService.setContentHandler((response) => {
+    // Convert and forward to conversation relay
+    conversationRelay.handleContent(response);
+});
+
+conversationRelay.setOutgoingMessageHandler((message) => {
+    // Send to WebSocket client
+    ws.send(JSON.stringify(message));
+});
+```
+
+#### Resource Management
+
+**Proper Cleanup:**
+```typescript
+cleanup(): void {
+    // Clear all handlers to prevent memory leaks
+    this.contentHandler = undefined;
+    this.toolResultHandler = undefined;
+    this.errorHandler = undefined;
+    this.callSidHandler = undefined;
+    
+    // Clean up other resources
+    this.removeAllListeners();
+}
+```
+
+### Architecture Boundaries
+
+#### Preserved Event-Driven Patterns
+
+The DI transformation maintains event-driven patterns where appropriate:
+
+- **WebSocket Server Events**: `ws.on('message')`, `ws.on('close')`, `ws.on('error')` remain unchanged
+- **Network Layer**: TCP/HTTP server events continue using Node.js EventEmitter patterns
+- **External Integrations**: Twilio webhooks and external API callbacks maintain event-driven approaches
+
+#### DI Application Areas
+
+The Dependency Injection pattern is applied to:
+
+- **Service-to-Service Communication**: All internal service communication
+- **Business Logic Handlers**: Core application logic and data processing
+- **Cross-Cutting Concerns**: Logging, error handling, and monitoring
+- **Configuration Management**: Dynamic configuration and context updates
+
+This selective approach ensures optimal performance and maintainability while respecting the natural boundaries between different system layers.
 
 ### TypeScript Interface Enforcement
 
@@ -689,7 +885,7 @@ The ResponseService supports interrupting ongoing AI responses to enable natural
 The current implementation uses a simple boolean flag to manage interrupts:
 
 ```typescript
-class ResponseService extends EventEmitter {
+class ResponseService implements ResponseService {
     protected isInterrupted: boolean;
 
     interrupt(): void {
@@ -730,7 +926,7 @@ class ResponseService extends EventEmitter {
 The AbortController approach provides a more robust and standards-compliant interrupt mechanism:
 
 ```typescript
-class ResponseService extends EventEmitter {
+class ResponseService implements ResponseService {
     protected abortController: AbortController | null;
 
     interrupt(): void {

@@ -7,7 +7,7 @@
  */
 
 import { logOut, logError } from '../utils/logger.js';
-import { ResponseService, ContentResponse, ToolResult, ToolResultEvent } from '../interfaces/ResponseService.js';
+import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, ContentHandler, ToolResultHandler, ErrorHandler } from '../interfaces/ResponseService.js';
 
 class FlowiseResponseService implements ResponseService {
     private contextFile: string;
@@ -15,9 +15,9 @@ class FlowiseResponseService implements ResponseService {
     private isInterrupted: boolean;
 
     // Handler functions
-    private contentHandler?: (response: ContentResponse) => void;
-    private toolResultHandler?: (toolResult: ToolResultEvent) => void;
-    private errorHandler?: (error: Error) => void;
+    private contentHandler?: ContentHandler;
+    private toolResultHandler?: ToolResultHandler;
+    private errorHandler?: ErrorHandler;
     private callSidHandler?: (callSid: string, responseMessage: any) => void;
 
     /**
@@ -49,21 +49,21 @@ class FlowiseResponseService implements ResponseService {
     /**
      * Sets the content handler for response chunks
      */
-    setContentHandler(handler: (response: ContentResponse) => void): void {
+    setContentHandler(handler: ContentHandler): void {
         this.contentHandler = handler;
     }
 
     /**
      * Sets the tool result handler for tool execution results
      */
-    setToolResultHandler(handler: (toolResult: ToolResultEvent) => void): void {
+    setToolResultHandler(handler: ToolResultHandler): void {
         this.toolResultHandler = handler;
     }
 
     /**
      * Sets the error handler for error events
      */
-    setErrorHandler(handler: (error: Error) => void): void {
+    setErrorHandler(handler: ErrorHandler): void {
         this.errorHandler = handler;
     }
 

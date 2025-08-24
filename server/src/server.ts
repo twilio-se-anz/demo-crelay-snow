@@ -124,15 +124,15 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
                     message.callSid
                 );
 
-                // Attach the Event listener to send event messages from the Conversation Relay back to the WS client
-                conversationRelaySession.on('conversationRelay.outgoingMessage', (outgoingMessage: OutgoingMessage) => {
+                // Set up handler to send event messages from the Conversation Relay back to the WS client
+                conversationRelaySession.setOutgoingMessageHandler((outgoingMessage: OutgoingMessage) => {
                     // logOut('WS', `Sending message out: ${JSON.stringify(outgoingMessage)}`);
                     ws.send(JSON.stringify(outgoingMessage));
                 });
 
-                // Add event listener for call SID specific events if callSid exists
+                // Set up handler for call SID specific events if callSid exists
                 if (message.callSid) {
-                    conversationRelaySession.on(`conversationRelay.${message.callSid}`, (responseMessage: any) => {
+                    conversationRelaySession.setCallSidEventHandler((callSid: string, responseMessage: any) => {
                         logOut('WS', `Got a call SID event for the conversation relay: ${JSON.stringify(responseMessage)}`);
                         // Handle the message as needed
                     });

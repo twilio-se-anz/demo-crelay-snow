@@ -1,4 +1,18 @@
-import { EventEmitter } from 'events';
+/**
+ * Handler function type for outgoing messages from ConversationRelay services
+ */
+export type OutgoingMessageHandler = (message: OutgoingMessage) => void;
+
+/**
+ * Handler function type for call SID specific events from LLM services
+ */
+export type CallSidEventHandler = (callSid: string, responseMessage: any) => void;
+
+/**
+ * Handler function type for silence events from ConversationRelay services
+ * Handles both silence breaker messages and call termination messages
+ */
+export type SilenceEventHandler = (message: OutgoingMessage) => void;
 
 /**
  * Interface for session data
@@ -138,7 +152,14 @@ export type OutgoingMessage = TextTokensMessage | PlayMediaMessage | SendDigitsM
 /**
  * ConversationRelayService - manages conversation relay between users and an LLM service
  */
-export interface ConversationRelay extends EventEmitter {
+export interface ConversationRelay {
+
+    /**
+     * Handler setters - called once during setup to register event handlers
+     */
+    setOutgoingMessageHandler(handler: OutgoingMessageHandler): void;
+    setCallSidEventHandler(handler: CallSidEventHandler): void;
+    setSilenceEventHandler(handler: SilenceEventHandler): void;
 
     /**
      * Initializes a new conversation relay session
@@ -179,7 +200,7 @@ export interface ConversationRelay extends EventEmitter {
 /**
  * ConversationRelayService class declaration
  */
-export declare class ConversationRelayService extends EventEmitter implements ConversationRelay {
+export declare class ConversationRelayService implements ConversationRelay {
     static create(
         sessionData: SessionData,
         contextFile: string,
@@ -187,6 +208,9 @@ export declare class ConversationRelayService extends EventEmitter implements Co
         callSid?: string
     ): Promise<ConversationRelayService>;
 
+    setOutgoingMessageHandler(handler: OutgoingMessageHandler): void;
+    setCallSidEventHandler(handler: CallSidEventHandler): void;
+    setSilenceEventHandler(handler: SilenceEventHandler): void;
     setupMessage(sessionData: SessionData): Promise<void>;
     incomingMessage(message: IncomingMessage): Promise<void>;
     outgoingMessage(message: OutgoingMessage): Promise<void>;

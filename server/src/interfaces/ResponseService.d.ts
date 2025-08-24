@@ -4,6 +4,21 @@
  */
 
 /**
+ * Handler function type for content responses from LLM services
+ */
+export type ContentHandler = (response: ContentResponse) => void;
+
+/**
+ * Handler function type for tool result events from LLM services
+ */
+export type ToolResultHandler = (toolResult: ToolResultEvent) => void;
+
+/**
+ * Handler function type for error events from LLM services
+ */
+export type ErrorHandler = (error: Error) => void;
+
+/**
  * Interface for content response chunks
  */
 export interface ContentResponse {
@@ -37,9 +52,9 @@ export interface ResponseService {
     /**
      * Handler setters - called once during setup to register event handlers
      */
-    setContentHandler(handler: (response: ContentResponse) => void): void;
-    setToolResultHandler(handler: (toolResult: ToolResultEvent) => void): void;
-    setErrorHandler(handler: (error: Error) => void): void;
+    setContentHandler(handler: ContentHandler): void;
+    setToolResultHandler(handler: ToolResultHandler): void;
+    setErrorHandler(handler: ErrorHandler): void;
     setCallSidHandler(handler: (callSid: string, responseMessage: any) => void): void;
     /**
      * Generates a streaming response from the LLM service

@@ -1,4 +1,6 @@
 /**
+ * @class OpenAIResponseService 
+ * @implements ResponseService
  * Base service class for handling LLM API interactions using OpenAI's Responses API and managing conversation flow.
  * This service orchestrates:
  * 
@@ -61,7 +63,7 @@ import { dirname } from 'path';
 import type { ResponseInput, ResponseStreamEvent } from 'openai/resources/responses/responses.mjs';
 
 import { logOut, logError } from '../utils/logger.js';
-import { ResponseService, ContentResponse, ToolResult, ToolResultEvent } from '../interfaces/ResponseService.js';
+import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, ContentHandler, ToolResultHandler, ErrorHandler } from '../interfaces/ResponseService.js';
 
 dotenv.config();
 
@@ -144,15 +146,15 @@ class OpenAIResponseService implements ResponseService {
     /**
      * Sets the content, result and error handlers
      */
-    setContentHandler(handler: (response: ContentResponse) => void): void {
+    setContentHandler(handler: ContentHandler): void {
         this.contentHandler = handler;
     }
 
-    setToolResultHandler(handler: (toolResult: ToolResultEvent) => void): void {
+    setToolResultHandler(handler: ToolResultHandler): void {
         this.toolResultHandler = handler;
     }
 
-    setErrorHandler(handler: (error: Error) => void): void {
+    setErrorHandler(handler: ErrorHandler): void {
         this.errorHandler = handler;
     }
 

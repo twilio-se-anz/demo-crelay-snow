@@ -1,5 +1,124 @@
 # Changelog
 
+## Release v4.2.1
+
+### Handler Type Organization Refactoring
+
+#### Handler Type Relocation
+- **Improved Organization**: Moved handler types from centralized `handlers.ts` to their respective interface files for better code organization
+- **Enhanced Cohesion**: Handler types are now co-located with the interfaces they support, improving maintainability and discoverability
+- **Cleaner Dependencies**: Reduced coupling between interface files by eliminating the central handler types dependency
+
+#### File Structure Changes
+- **Removed**: `server/src/types/handlers.ts` - Centralized handler types file eliminated
+- **Enhanced**: `server/src/interfaces/ResponseService.d.ts` - Now includes `ContentHandler`, `ToolResultHandler`, and `ErrorHandler` types
+- **Enhanced**: `server/src/interfaces/ConversationRelay.d.ts` - Now includes `OutgoingMessageHandler`, `CallSidEventHandler`, and `SilenceEventHandler` types
+- **Updated**: All import statements updated to reference handler types from their respective interface files
+
+#### Interface Method Updates
+- **Type Safety Enhancement**: Updated interface method signatures to use proper type names instead of inline function types
+- **Consistency Improvement**: All service implementations now use strongly-typed handler parameters consistently
+- **Better IntelliSense**: Improved IDE support with proper type definitions co-located with interface documentation
+
+#### Import Statement Updates
+- **ConversationRelayService**: Updated to import handler types from `../interfaces/ConversationRelay.js`
+- **OpenAIResponseService**: Updated to import handler types from `../interfaces/ResponseService.js`  
+- **FlowiseResponseService**: Updated to import handler types from `../interfaces/ResponseService.js`
+- **Eliminated Unused Imports**: Removed unnecessary import of `ToolResultEvent` in FlowiseResponseService
+
+### Benefits of Handler Type Reorganization
+
+#### Code Organization
+- **Better Cohesion**: Handler types are now located next to the interfaces they support
+- **Improved Discoverability**: Developers can find all related types and interfaces in a single file
+- **Cleaner Architecture**: Eliminates the need for a centralized types file that creates unnecessary dependencies
+
+#### Maintainability
+- **Easier Updates**: Changes to handler signatures can be made alongside interface updates
+- **Better Documentation**: Handler types benefit from proximity to interface documentation
+- **Reduced Coupling**: Interface files are now self-contained with their associated types
+
+#### Developer Experience
+- **Enhanced IntelliSense**: IDE can provide better autocomplete and documentation when types and interfaces are co-located
+- **Cleaner Imports**: Developers import both interfaces and their handler types from the same location
+- **Better Code Navigation**: Related types and interfaces are in the same file for easier navigation
+
+This refactoring maintains full backward compatibility while providing better code organization and improved developer experience through enhanced type locality and reduced coupling between interface files.
+
+## Release v4.2.0
+
+### Dependency Injection Architecture Migration
+
+#### Complete Event-Driven to Dependency Injection Transformation
+- **Architectural Paradigm Shift**: Migrated from EventEmitter-based communication to Dependency Injection pattern across all service layers
+- **Enhanced Type Safety**: Replaced magic string events with strongly-typed handler functions for compile-time validation
+- **Performance Optimization**: Eliminated EventEmitter overhead with direct function calls for faster service communication
+- **Improved Testability**: Handler functions enable easier mocking, stubbing, and unit testing compared to event-based testing
+
+#### ResponseService Interface DI Implementation
+- **Handler Function Architecture**: Replaced EventEmitter inheritance with handler setter methods:
+  - `setContentHandler(handler: ContentHandler): void` - For LLM streaming responses
+  - `setToolResultHandler(handler: ToolResultHandler): void` - For tool execution results  
+  - `setErrorHandler(handler: ErrorHandler): void` - For error event handling
+  - `setCallSidHandler(handler: CallSidEventHandler): void` - For call-specific events
+- **Service Implementations**: Updated OpenAIResponseService and FlowiseResponseService to use handler pattern
+- **Type-Safe Communication**: Direct handler invocation with `this.contentHandler?.(response)` instead of `this.emit('responseService.content', response)`
+
+#### ConversationRelayService DI Enhancement
+- **Handler Integration**: Added support for ResponseService handlers through dependency injection
+- **Outgoing Message Management**: Implemented `setOutgoingMessageHandler()` for WebSocket message transmission
+- **Silence Event Handling**: Added `setSilenceEventHandler()` for silence detection and call termination events
+- **Event Elimination**: Removed all `this.emit()` calls in favor of direct handler invocations
+
+#### Server.ts WebSocket Integration
+- **Selective DI Adoption**: Converted ConversationRelayService events to handlers while preserving WebSocket server events
+- **Handler Registration**: Replaced `conversationRelaySession.on('conversationRelay.outgoingMessage', ...)` with `conversationRelaySession.setOutgoingMessageHandler(...)`
+- **Call SID Event Handling**: Updated dynamic call-specific events to use static handlers with callSid parameters
+- **Preserved WebSocket Architecture**: Maintained `ws.on('message')`, `ws.on('close')`, `ws.on('error')` event-driven pattern
+
+#### Type System Enhancements
+- **Handler Type Definitions**: Created comprehensive handler type system in `handlers.ts`:
+  ```typescript
+  export type ContentHandler = (response: ContentResponse) => void;
+  export type ToolResultHandler = (toolResult: ToolResultEvent) => void;
+  export type ErrorHandler = (error: Error) => void;
+  export type CallSidEventHandler = (callSid: string, responseMessage: any) => void;
+  export type OutgoingMessageHandler = (message: OutgoingMessage) => void;
+  export type SilenceEventHandler = (message: OutgoingMessage) => void;
+  ```
+- **Interface Updates**: Enhanced ResponseService and ConversationRelay interfaces with handler setter methods
+- **Type Safety**: Proper type conversion from `ContentResponse` to `OutgoingMessage` for cross-service communication
+
+#### Resource Management
+- **Handler Cleanup**: Implemented proper handler cleanup in service destructors to prevent memory leaks
+- **Optional Chaining**: Used `?.()` operator for safe handler invocation when handlers may not be set
+- **Service Lifecycle**: Enhanced cleanup methods to clear all handlers and prevent resource leaks
+
+### Benefits of Dependency Injection Architecture
+
+#### Performance Improvements
+- **Direct Function Calls**: Eliminated EventEmitter dispatch overhead for faster service communication
+- **Reduced Memory Footprint**: No event listener registration and cleanup overhead
+- **Optimized Call Stack**: Direct handler invocation without event system intermediation
+
+#### Type Safety & Developer Experience  
+- **Compile-Time Validation**: TypeScript enforces correct handler signatures and prevents runtime errors
+- **IntelliSense Support**: Full IDE autocompletion and documentation for handler functions
+- **Elimination of Magic Strings**: No more `'responseService.content'` strings that can break silently
+
+#### Testing & Maintainability
+- **Easier Mocking**: Handler functions are simple to mock compared to complex event listener testing
+- **Unit Test Isolation**: Individual handlers can be tested independently without event system complexity
+- **Cleaner Dependencies**: Clear handler contracts make service dependencies explicit and manageable
+
+#### Architectural Benefits
+- **Single Responsibility**: Each handler focuses on one specific communication channel
+- **Interface Segregation**: Services only implement handlers they actually need
+- **Dependency Inversion**: Services depend on handler abstractions, not concrete implementations
+- **Better Separation of Concerns**: Clear distinction between service logic and communication mechanisms
+
+This migration represents a fundamental architectural improvement providing better performance, type safety, and maintainability while maintaining full functional compatibility with existing WebSocket and HTTP endpoints.
+
 ## Release v4.1.2
 
 ### Interface Method Splitting
@@ -187,7 +306,7 @@ class CustomService extends ResponseService {
   }
 }
 
-// After (v4.0)
+// After (v4.0) - Note: v4.2.0 removes EventEmitter inheritance for pure DI
 class CustomService extends EventEmitter implements ResponseService {
   private constructor() {
     super();

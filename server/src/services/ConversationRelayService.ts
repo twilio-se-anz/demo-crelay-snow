@@ -1,6 +1,6 @@
 /**
  * @class ConversationRelayService
- * @extends EventEmitter
+ * @implements ConversationRelay
  * @description Manages conversation relay between users and an LLM (Language Learning Model) service.
  * This service orchestrates:
  * 
@@ -68,19 +68,24 @@
  * relayService.cleanup();
  */
 
-import { EventEmitter } from 'events';
 import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
 import { ResponseService } from '../interfaces/ResponseService.js';
 import { OpenAIResponseService } from './OpenAIResponseService.js';
+import { OutgoingMessageHandler, CallSidEventHandler, SilenceEventHandler } from '../interfaces/ConversationRelay.js';
 import type { SessionData, IncomingMessage, OutgoingMessage, ConversationRelay } from '../interfaces/ConversationRelay.js';
 
-class ConversationRelayService extends EventEmitter implements ConversationRelay {
+class ConversationRelayService implements ConversationRelay {
     private responseService: ResponseService;
     private sessionData: SessionData;
     private silenceHandler: SilenceHandler | null;
     private logMessage: string | null;
     private accumulatedTokens: string;
+
+    // Handler functions
+    private outgoingMessageHandler?: OutgoingMessageHandler;
+    private callSidEventHandler?: CallSidEventHandler;
+    private silenceEventHandler?: SilenceEventHandler;
 
     /**
      * Creates a new ConversationRelayService instance using the factory method.
@@ -91,7 +96,6 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
      * @throws {Error} If responseService is not provided
      */
     private constructor(responseService: ResponseService, sessionData: SessionData) {
-        super();
         this.responseService = responseService;
         this.sessionData = sessionData;
         this.silenceHandler = new SilenceHandler();
@@ -110,7 +114,13 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
                 // Reset accumulated tokens for next response
                 this.accumulatedTokens = '';
             }
-            this.emit('conversationRelay.outgoingMessage', response);
+            // Convert ContentResponse to OutgoingMessage format
+            const outgoingMessage: OutgoingMessage = {
+                type: 'text',
+                token: response.token,
+                last: response.last
+            };
+            this.outgoingMessageHandler?.(outgoingMessage);
         });
 
         // Check the tool call result if for CR specific tool calls, as these need to be sent to the WS server
@@ -119,7 +129,7 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
             // Check if the tool result is for the conversation relay
             if (toolResult.toolType === "crelay") {
                 // Send the tool result to the WS server
-                this.emit('conversationRelay.outgoingMessage', toolResult.toolData);
+                this.outgoingMessageHandler?.(toolResult.toolData);
             }
         });
 
@@ -129,6 +139,27 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
             // Could emit an error event or handle it appropriately
         });
         logOut(`Conversation Relay`, `Service constructed`);
+    }
+
+    /**
+     * Sets the outgoing message handler for sending messages to WebSocket client
+     */
+    setOutgoingMessageHandler(handler: OutgoingMessageHandler): void {
+        this.outgoingMessageHandler = handler;
+    }
+
+    /**
+     * Sets the call SID event handler for call-specific events
+     */
+    setCallSidEventHandler(handler: CallSidEventHandler): void {
+        this.callSidEventHandler = handler;
+    }
+
+    /**
+     * Sets the silence event handler for silence detection events
+     */
+    setSilenceEventHandler(handler: SilenceEventHandler): void {
+        this.silenceEventHandler = handler;
     }
 
     /**
@@ -157,7 +188,7 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
             if (callSid) {
                 responseService.setCallSidHandler((receivedCallSid: string, responseMessage: any) => {
                     logOut('Conversation Relay', `Got a call SID event: ${receivedCallSid}, ${JSON.stringify(responseMessage)}`);
-                    instance.emit(`conversationRelay.${receivedCallSid}`, responseMessage);
+                    instance.callSidEventHandler?.(receivedCallSid, responseMessage);
                 });
             }
 
@@ -196,7 +227,9 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
                 } else if (silenceMessage.type === 'end') {
                     logOut(`Conversation Relay`, `${this.logMessage} Ending call due to silence: ${JSON.stringify(silenceMessage)}`);
                 }
-                this.emit('conversationRelay.silence', silenceMessage);
+                // Convert SilenceHandlerMessage to OutgoingMessage and use handler
+                const outgoingMessage: OutgoingMessage = silenceMessage as OutgoingMessage;
+                this.silenceEventHandler?.(outgoingMessage);
             });
         }
 
@@ -271,7 +304,7 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
     async outgoingMessage(message: OutgoingMessage): Promise<void> {
         try {
             logOut(`Conversation Relay`, `${this.logMessage} Outgoing structured message: ${JSON.stringify(message)}`);
-            this.emit('conversationRelay.outgoingMessage', message);
+            this.outgoingMessageHandler?.(message);
         } catch (error) {
             logError(`Conversation Relay`, `${this.logMessage} Error in outgoing message handling: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
@@ -329,8 +362,10 @@ class ConversationRelayService extends EventEmitter implements ConversationRelay
         if (this.responseService) {
             this.responseService.cleanup();
         }
-        // Remove all event listeners from this instance
-        this.removeAllListeners();
+        // Clear handlers
+        this.outgoingMessageHandler = undefined;
+        this.callSidEventHandler = undefined;
+        this.silenceEventHandler = undefined;
     }
 }
 
