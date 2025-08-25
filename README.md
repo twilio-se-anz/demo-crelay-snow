@@ -1,33 +1,10 @@
 # Simple Conversation Relay
 
-This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts. As an overview here is how the project is put together:
+This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts.
 
-## Release v4.2.0
+## Release v4.2.1
 
-This release introduces a major architectural improvement with the complete migration from EventEmitter-based communication to Dependency Injection pattern across all service layers. The system now uses strongly-typed handler functions instead of magic string events, providing enhanced type safety, better performance through direct function calls, and improved testability with easier mocking capabilities. This transformation maintains full backward compatibility while establishing a more robust foundation for future development. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history and migration guide.
-
-## Quick Tip
-Configure your Conversation Relay parameters in server/src/services/TwilioService.ts
-
-```typescript
-      // Generate the Twiml we will need once the call is connected. Note, this could be done in two steps via the server, were we set a url: instead of twiml:, but this just seemed overly complicated.
-      const response = new twilio.twiml.VoiceResponse();
-      const connect = response.connect();
-      const conversationRelay = connect.conversationRelay({
-            url: `wss://${serverBaseUrl}/conversation-relay`,
-            transcriptionProvider: "deepgram",
-            speechModel: "nova-3-general",
-            interruptible: "any",
-            ttsProvider: "Elevenlabs",
-            voice: "Charlie-flash_v2_5",
-            dtmfDetection: true,
-      } as any);
-
-      conversationRelay.parameter({
-            name: 'callReference',
-            value: callReference
-      });
-```
+This release introduces significant architectural improvements with unified handler interfaces that consolidate multiple setter methods into single handler objects. The system now uses `ResponseHandler` and `ConversationRelayHandler` unified interfaces instead of separate setter methods, providing cleaner dependency injection, better encapsulation, and simplified service initialization. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
 ## Prerequisites
 
@@ -36,7 +13,9 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 - ngrok
 - TypeScript
 
-## Project Structure
+## Server
+
+### Project Structure
 
 ```
 .
@@ -44,7 +23,6 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 │   ├── .env.example      # Example environment configuration
 │   ├── package.json      # Server dependencies and scripts
 │   ├── tsconfig.json     # TypeScript configuration
-│   ├── server.ts         # Main server implementation
 │   ├── assets/           # Configuration assets
 │   │   ├── defaultContext.md    # Default GPT conversation context
 │   │   ├── defaultToolManifest.json # Default available tools configuration
@@ -70,237 +48,7 @@ Configure your Conversation Relay parameters in server/src/services/TwilioServic
 │   │       └── logger.ts
 ```
 
-## Server Component
-
 The server handles WebSocket connections and manages conversation relay functionality. It includes GPT service integration for natural language processing and Twilio integration for voice call handling.
-
-## Dependency Injection Architecture
-
-### Overview of DI Implementation
-
-Version 4.2.0 introduces a comprehensive Dependency Injection architecture that replaces the previous EventEmitter-based communication pattern. This architectural transformation provides significant benefits in type safety, performance, and testability while maintaining full backward compatibility.
-
-### Core DI Components
-
-#### Handler Function Types
-
-The system defines strongly-typed handler functions organized by service interface:
-
-**ResponseService Handlers** (`server/src/interfaces/ResponseService.d.ts`):
-```typescript
-export type ContentHandler = (response: ContentResponse) => void;
-export type ToolResultHandler = (toolResult: ToolResultEvent) => void;
-export type ErrorHandler = (error: Error) => void;
-```
-
-**ConversationRelay Handlers** (`server/src/interfaces/ConversationRelay.d.ts`):
-```typescript
-export type OutgoingMessageHandler = (message: OutgoingMessage) => void;
-export type CallSidEventHandler = (callSid: string, responseMessage: any) => void;
-export type SilenceEventHandler = (message: OutgoingMessage) => void;
-```
-
-#### Service Interface Enhancement
-
-**ResponseService Interface** (`server/src/interfaces/ResponseService.d.ts`):
-```typescript
-export interface ResponseService {
-    // Handler setters - called once during setup
-    setContentHandler(handler: ContentHandler): void;
-    setToolResultHandler(handler: ToolResultHandler): void;
-    setErrorHandler(handler: ErrorHandler): void;
-    setCallSidHandler(handler: CallSidEventHandler): void;
-    
-    // Service methods
-    generateResponse(role: 'user' | 'system', prompt: string): Promise<void>;
-    insertMessage(role: 'system' | 'user' | 'assistant', message: string): Promise<void>;
-    // ... other methods
-}
-```
-
-**ConversationRelay Interface** (`server/src/interfaces/ConversationRelay.d.ts`):
-```typescript
-export interface ConversationRelay {
-    // Handler setters for service communication
-    setOutgoingMessageHandler(handler: OutgoingMessageHandler): void;
-    setCallSidEventHandler(handler: CallSidEventHandler): void;
-    setSilenceEventHandler(handler: SilenceEventHandler): void;
-    
-    // Service methods
-    setupMessage(sessionData: SessionData): Promise<void>;
-    incomingMessage(message: IncomingMessage): Promise<void>;
-    // ... other methods
-}
-```
-
-### DI Pattern Implementation
-
-#### Service-to-Service Communication
-
-**Before (EventEmitter Pattern):**
-```typescript
-// ResponseService emitting events
-this.emit('responseService.content', response);
-this.emit('responseService.toolResult', toolResult);
-this.emit('responseService.error', error);
-
-// ConversationRelayService listening to events
-responseService.on('responseService.content', (response) => {
-    this.emit('conversationRelay.outgoingMessage', response);
-});
-```
-
-**After (Dependency Injection Pattern):**
-```typescript
-// ResponseService using handlers
-this.contentHandler?.(response);
-this.toolResultHandler?.(toolResult);
-this.errorHandler?.(error);
-
-// ConversationRelayService setting up handlers
-responseService.setContentHandler((response) => {
-    const outgoingMessage = { type: 'text', token: response.token, last: response.last };
-    this.outgoingMessageHandler?.(outgoingMessage);
-});
-```
-
-#### WebSocket Server Integration
-
-**Before (Event-Driven Pattern):**
-```typescript
-conversationRelaySession.on('conversationRelay.outgoingMessage', (message) => {
-    ws.send(JSON.stringify(message));
-});
-```
-
-**After (Handler-Based Pattern):**
-```typescript
-conversationRelaySession.setOutgoingMessageHandler((message) => {
-    ws.send(JSON.stringify(message));
-});
-```
-
-### Benefits of Dependency Injection Architecture
-
-#### 🚀 Performance Advantages
-
-- **Direct Function Calls**: Eliminated EventEmitter dispatch overhead, reducing CPU usage and improving response times
-- **Reduced Memory Footprint**: No event listener registration/cleanup overhead or event queue management
-- **Optimized Call Stack**: Direct handler invocation without event system intermediation
-- **Lower Latency**: Immediate function calls vs. event loop scheduling
-
-#### 🛡️ Type Safety & Developer Experience
-
-- **Compile-Time Validation**: TypeScript enforces correct handler signatures, preventing runtime errors
-- **IntelliSense Support**: Full IDE autocompletion, parameter hints, and documentation for handler functions
-- **Elimination of Magic Strings**: No more `'responseService.content'` strings that can break silently during refactoring
-- **Interface Contracts**: Clear, enforceable contracts between services
-
-#### 🧪 Testing & Maintainability Benefits
-
-- **Easier Mocking**: Simple function mocking vs. complex EventEmitter testing scenarios
-- **Unit Test Isolation**: Individual handlers can be tested independently without event system complexity
-- **Dependency Clarity**: Explicit handler dependencies make service relationships transparent
-- **Better Debugging**: Direct call stacks make debugging significantly easier
-
-#### 🏗️ Architectural Improvements
-
-- **Single Responsibility**: Each handler focuses on one specific communication channel
-- **Interface Segregation**: Services only implement handlers they actually need
-- **Dependency Inversion**: Services depend on handler abstractions, not concrete implementations
-- **Better Separation of Concerns**: Clear distinction between service logic and communication mechanisms
-
-### Migration from EventEmitter Pattern
-
-#### Handler Registration Pattern
-
-**Service Setup:**
-```typescript
-// Create service instances
-const responseService = await OpenAIResponseService.create(contextFile, toolManifest);
-const conversationRelay = new ConversationRelayService(responseService, sessionData);
-
-// Set up handler chain
-responseService.setContentHandler((response) => {
-    // Convert and forward to conversation relay
-    conversationRelay.handleContent(response);
-});
-
-conversationRelay.setOutgoingMessageHandler((message) => {
-    // Send to WebSocket client
-    ws.send(JSON.stringify(message));
-});
-```
-
-#### Resource Management
-
-**Proper Cleanup:**
-```typescript
-cleanup(): void {
-    // Clear all handlers to prevent memory leaks
-    this.contentHandler = undefined;
-    this.toolResultHandler = undefined;
-    this.errorHandler = undefined;
-    this.callSidHandler = undefined;
-    
-    // Clean up other resources
-    this.removeAllListeners();
-}
-```
-
-### Architecture Boundaries
-
-#### Preserved Event-Driven Patterns
-
-The DI transformation maintains event-driven patterns where appropriate:
-
-- **WebSocket Server Events**: `ws.on('message')`, `ws.on('close')`, `ws.on('error')` remain unchanged
-- **Network Layer**: TCP/HTTP server events continue using Node.js EventEmitter patterns
-- **External Integrations**: Twilio webhooks and external API callbacks maintain event-driven approaches
-
-#### DI Application Areas
-
-The Dependency Injection pattern is applied to:
-
-- **Service-to-Service Communication**: All internal service communication
-- **Business Logic Handlers**: Core application logic and data processing
-- **Cross-Cutting Concerns**: Logging, error handling, and monitoring
-- **Configuration Management**: Dynamic configuration and context updates
-
-This selective approach ensures optimal performance and maintainability while respecting the natural boundaries between different system layers.
-
-### TypeScript Interface Enforcement
-
-Version 4.1.0 introduces comprehensive TypeScript interfaces for all Twilio WebSocket message types, providing enhanced type safety and developer experience:
-
-#### Outgoing Message Types
-The system now includes strongly-typed interfaces for all Twilio WebSocket outgoing messages:
-
-- **`TextTokensMessage`**: For sending text to be converted to speech
-- **`PlayMediaMessage`**: For playing audio from URLs
-- **`SendDigitsMessage`**: For sending DTMF digits
-- **`SwitchLanguageMessage`**: For changing TTS and transcription languages
-- **`EndSessionMessage`**: For terminating conversation sessions
-
-These are unified under the `OutgoingMessage` union type, ensuring compile-time validation:
-
-```typescript
-// Example usage with type safety
-const textMessage: TextTokensMessage = {
-    type: 'text',
-    token: 'Hello, how can I help you?',
-    last: true,
-    interruptible: true
-};
-
-await conversationRelaySession.outgoingMessage(textMessage);
-```
-
-#### Benefits
-- **Compile-time Type Checking**: Prevents runtime errors from malformed messages
-- **IntelliSense Support**: Enhanced developer experience with auto-completion
-- **Documentation**: Self-documenting code through interface definitions
-- **Maintainability**: Easier refactoring and code maintenance
 
 ### Running the Server
 
@@ -361,23 +109,6 @@ ngrok http --domain server-yourdomain.ngrok.dev 3001
 
 4. **Cleanup**: The system properly cleans up monitoring resources when the call ends or disconnects.
 
-### Implementation Details
-
-The silence handling is modular and follows separation of concerns:
-- `SilenceHandler` class manages the logic independently
-- Messages are passed back to the server via callbacks
-- The server maintains control of WebSocket communication
-- Thresholds are configurable through constants in server.ts
-
-This design ensures reliable conversation flow while preventing indefinite silence periods, improving the overall user experience.
-
-## Silence Handling
-
-The system includes a robust silence detection mechanism to manage periods of inactivity during conversations. This functionality is implemented in the `SilenceHandler` class and operates based on two key thresholds:
-
-- `SILENCE_SECONDS_THRESHOLD` (5 seconds): The duration of silence before triggering a reminder
-- `SILENCE_RETRY_THRESHOLD` (3 attempts): Maximum number of reminders before ending the call
-
 ## Twilio Configuration
 
 ### Twilio Phone Number Configuration
@@ -392,60 +123,34 @@ The system includes a robust silence detection mechanism to manage periods of in
      ```
    - Method: HTTP POST
 
-This endpoint will handle incoming calls and establish the WebSocket connection for conversation relay.
+Configure your Conversation Relay parameters in server/src/services/TwilioService.ts:
+
+```typescript
+// Generate the Twiml we will need once the call is connected
+const response = new twilio.twiml.VoiceResponse();
+const connect = response.connect();
+const conversationRelay = connect.conversationRelay({
+      url: `wss://${serverBaseUrl}/conversation-relay`,
+      transcriptionProvider: "deepgram",
+      speechModel: "nova-3-general",
+      interruptible: "any",
+      ttsProvider: "Elevenlabs",
+      voice: "Charlie-flash_v2_5",
+      dtmfDetection: true,
+} as any);
+
+conversationRelay.parameter({
+      name: 'callReference',
+      value: callReference
+});
+```
 
 ### WebSocket Connection Flow
 
 1. When a call is received, Twilio initiates a WebSocket connection to `wss://server-yourdomain.ngrok.dev/conversation-relay`
-2. The server receives a 'setup' message containing call details:
-   - Caller's phone number (`from`)
-   - Called number (`to`)
-   - Call SID
-   - Other call metadata
-   - Custom parameters (including callReference)
-
-3. The server then:
-   - Stores the call parameters for the session in a wsSessionsMap
-   - Retrieves any parameter data associated with the callReference
-   - Creates a ResponseService instance using the factory pattern with the specified context and tool manifest files
-   - Creates a ConversationRelayService instance with:
-     - ResponseService for LLM interactions
-     - Session data containing setup information and parameters
-     - Silence handler for managing inactivity
-   - Sets up event listeners for WebSocket communication
-   - Begins processing incoming messages
-
-4. Session Management:
-   - Each WebSocket connection maintains its own isolated session
-   - Sessions are stored in a wsSessionsMap keyed by Call SID
-   - This enables multiple concurrent calls to be handled independently
-   - Each session has its own ResponseService and ConversationRelayService instances
-
-### Important Note on WebSocket Implementation
-
-⚠️ **Warning**: When implementing async/await with WebSocket connections, be careful about where you place your await statements. Do not use await in the main WebSocket connection handler (app.ws part). Instead, ensure all async operations are handled within the message event handler (ws.on("message")). This is crucial because:
-
-1. WebSocket connections are synchronous by nature
-2. Using await in the main connection handler could cause you to miss messages
-3. Example of correct implementation:
-
-```typescript
-// INCORRECT - Don't do this
-app.ws('/conversation-relay', async (ws, req) => {
-    await someAsyncOperation(); // This could cause missed messages
-    ws.on('message', (msg) => {
-        // Handle message
-    });
-});
-
-// CORRECT - Do this instead
-app.ws('/conversation-relay', (ws, req) => {
-    ws.on('message', async (msg) => {
-        await someAsyncOperation(); // Safe to use await here
-        // Handle message
-    });
-});
-```
+2. The server receives a 'setup' message containing call details and custom parameters
+3. The server creates service instances and begins processing incoming messages
+4. Each WebSocket connection maintains its own isolated session in a wsSessionsMap
 
 ## GPT Context Configuration
 
@@ -468,64 +173,29 @@ Key sections to configure:
 
 ### toolManifest.json
 
-Located in `server/assets/toolManifest.json`, this file defines the tools available to the OpenAI service. The service implements a dynamic tool loading system where tools are loaded based on their names in the manifest. Each tool's filename in the `/tools` directory must exactly match its name in the manifest.
+Located in `server/assets/toolManifest.json`, this file defines the tools available to the OpenAI service. Available tools:
 
-Available tools:
+1. `end-call` - Gracefully terminates the current call
+2. `live-agent-handoff` - Transfers the call to a human agent
+3. `send-dtmf` - Sends DTMF tones during the call
+4. `send-sms` - Sends SMS messages during the call
 
-1. `end-call`
-   - Gracefully terminates the current call
-   - Used for normal call completion or error scenarios
-   - Returns a "crelay" type response that bypasses LLM processing
+### Dynamic Context System
 
-2. `live-agent-handoff`
-   - Transfers the call to a human agent
-   - Required parameter: `callSid`
-   - Returns a "crelay" type response that bypasses LLM processing
+The system supports dynamic context loading through environment variables:
 
-3. `send-dtmf`
-   - Sends DTMF tones during the call
-   - Useful for automated menu navigation
-   - Returns a "crelay" type response that bypasses LLM processing
+- `defaultContext.md` and `defaultToolManifest.json` - Used when no specific context is configured
+- `MyContext.md` and `MyToolManifest.json` - Specialized context and tools for specific use cases
 
-4. `send-sms`
-   - Sends SMS messages during the call
-   - Used for verification codes or follow-up information
-   - Returns a "tool" type response for LLM processing or "error" type if sending fails
-
-Each tool now uses the ToolEvent system to emit events and return simple responses for conversation context:
-
-```typescript
-// Tools receive a ToolEvent object for event emission
-export default function (functionArguments: ToolArguments, toolEvent?: ToolEvent): ToolResponse {
-    // Tool logic here
-    
-    if (toolEvent) {
-        // Emit events for WebSocket transmission using the ToolEvent interface
-        toolEvent.emit('crelay', {
-            type: "action",
-            data: actionData
-        });
-        toolEvent.log(`Action completed: ${JSON.stringify(actionData)}`);
-    }
-    
-    // Return simple response for conversation context
-    return {
-        success: true,
-        message: "Action completed successfully"
-    };
-}
-```
-
-The ResponseService creates ToolEvent objects that provide tools with controlled access to:
-- **Event Emission**: `toolEvent.emit(eventType, data)` for sending events to ConversationRelayService
-- **Logging**: `toolEvent.log(message)` for standard logging
-- **Error Logging**: `toolEvent.logError(message)` for error reporting
-
-The ResponseService loads these tools during initialization and makes them available for use in conversations through OpenAI's function calling feature.
+To use a specific context:
+1. Add the context and tool manifest files to the `server/assets` directory
+2. Configure the environment variables in your `.env` file:
+   ```bash
+   LLM_CONTEXT=YourContext.md
+   LLM_MANIFEST=YourToolManifest.json
+   ```
 
 ## Environment Configuration
-
-### Server Environment Variables (server/.env)
 
 Create a `.env` file in the server directory with the following variables:
 
@@ -540,62 +210,27 @@ LLM_CONTEXT=MyContext.md                   # Specify which context file to use (
 LLM_MANIFEST=MyToolManifest.json      # Specify which tool manifest to use (defaults to defaultToolManifest.json)
 ```
 
-These variables are used by the server for:
-- Configuring the server port
-- Setting the server's base URL for Twilio integration
-- Authenticating with OpenAI's API
-- Specifying the OpenAI model for conversations
-- Loading specific context and tool configurations
-
-### Dynamic Context System
-
-The system supports dynamic context loading through environment variables, allowing different conversation contexts and tool configurations based on your needs. This feature enables the system to adapt its behavior and capabilities for different use cases.
-
-The dynamic context system is organized in the `server/assets` directory with multiple context and tool manifest files:
-
-- `defaultContext.md` and `defaultToolManifest.json` - Used when no specific context is configured
-- `MyContext.md` and `MyToolManifest.json` - Specialized context and tools for Bill of Quantities calls
-
-To use a specific context:
-1. Add the context and tool manifest files to the `server/assets` directory
-2. Configure the environment variables in your `.env` file:
-   ```bash
-   LLM_CONTEXT=YourContext.md
-   LLM_MANIFEST=YourToolManifest.json
-   ```
-
-If these variables are not set, the system defaults to:
-- `defaultContext.md`
-- `defaultToolManifest.json`
-
-This approach allows you to:
-- Support multiple use cases with different requirements
-- Maintain separation of concerns between different contexts
-- Easily add new contexts and tool sets
-- Switch contexts by updating environment variables
-
 ## Fly.io Deployment
 
-To deploy the server to Fly.io, follow these steps:
+To deploy the server to Fly.io:
 
 1. Navigate to the server directory:
 ```bash
 cd server
 ```
 
-2. For new deployments, use the `--no-deploy` option to create a new Fly.io app without deploying it immediately. This allows you to configure your app before the first deployment:
+2. For new deployments, use the `--no-deploy` option:
 ```bash
 fly launch --no-deploy
 ```
-Note: Make sure to update your `SERVER_BASE_URL` in the .env file to use your Fly.io app's hostname without the "https://" prefix.
 
 3. Ensure your `fly.toml` file has the correct port configuration:
 ```toml
 [http]
-  internal_port = 3001  # Make sure this matches your application port
+  internal_port = 3001
 ```
 
-4. Add the volume mount configuration to your `fly.toml` file:
+4. Add the volume mount configuration:
 ```toml
 [mounts]
   source = "assets"
@@ -607,36 +242,39 @@ Note: Make sure to update your `SERVER_BASE_URL` in the .env file to use your Fl
 fly secrets import < .env
 ```
 
-6. Now deploy your application and check the logs to make sure it is up and running.
+6. Deploy your application:
 ```bash
 fly deploy
 ```
 
-7. Verify your context and manifest files are in the mount by logging into the machine:
-```bash
-fly ssh console
-cd assets
-ls
-```
-
-This will show your context and manifest files in the mounted volume.
-
-8. Finally, check that the server is reachable and up by going to the fly.io base directory set above for SERVER_BASE_URL in a browser. You should get "WebSocket Server Running" as a response.
-
-
 ## Dependencies
+
+### Server Dependencies
+- express - Web application framework
+- express-ws - WebSocket support for Express
+- openai - OpenAI API client for GPT integration
+- dotenv - Environment configuration
+- winston - Logging framework
+- uuid - Unique identifier generation
+
+### Server Tools
+
+The server includes several built-in tools for call management:
+
+1. `end-call` - Gracefully terminates the current call
+2. `live-agent-handoff` - Transfers the call to a human agent  
+3. `send-dtmf` - Sends DTMF tones during the call
+4. `send-sms` - Sends SMS messages during the call
 
 ## Outbound Calling
 
-The system supports initiating outbound calls via an API endpoint. This allows external systems to trigger calls that connect to the Conversation Relay service.
-
-### API Endpoint
+The system supports initiating outbound calls via an API endpoint:
 
 ```
 POST /outboundCall
 ```
 
-#### Request Format
+### Request Format
 
 ```typescript
 interface RequestData {
@@ -650,7 +288,7 @@ interface RequestData {
 }
 ```
 
-#### Example Usage
+### Example Usage
 
 ```bash
 curl -X POST \
@@ -666,385 +304,176 @@ curl -X POST \
   }'
 ```
 
-### Data Flow and Parameter Reference
+---
 
-The system uses a reference mechanism to maintain context and pass parameters throughout the call lifecycle:
+# Architecture
 
-1. **Initial Storage**: When the outbound call endpoint is hit, all provided parameter data is stored in a `parameterDataMap` using the reference as the key:
-   ```typescript
-   parameterDataMap.set(requestData.callReference, { requestData });
-   ```
+## Service Architecture
 
-2. **Conversation Relay Parameter**: The reference is passed to the Conversation Relay service as a parameter:
-   ```typescript
-   conversationRelay.parameter({
-     name: 'callReference',
-     value: callReference
-   });
-   ```
-
-3. **WebSocket Session**: When the Conversation Relay establishes the WebSocket connection:
-   - The initial setup message contains the reference in customParameters
-   - The server retrieves the stored parameter data using this reference
-   - The parameter data is attached to the session for use throughout the call
-
-This mechanism allows you to:
-- Pass arbitrary parameters to the call session without size limitations
-- Access all parameter data throughout the call lifecycle
-- Maintain session-specific parameter storage
-
-### Implementation Details
-
-1. The endpoint stores the provided parameter data in a session map using the reference as the key
-2. Initiates an outbound call via Twilio using the provided phone number
-3. Connects the call to the Conversation Relay service once established
-4. The callReference is passed as a parameter to the Conversation Relay, allowing access to the stored parameter data during the call
-
-### Response
-
-Success:
-```json
-{
-  "success": true,
-  "response": "CA1234..." // Twilio Call SID
-}
-```
-
-Error:
-```json
-{
-  "success": false,
-  "error": "Error message"
-}
-```
-
-### Server Dependencies
-- express - Web application framework
-- express-ws - WebSocket support for Express
-- openai - OpenAI API client for GPT integration
-- dotenv - Environment configuration
-- winston - Logging framework
-- uuid - Unique identifier generation
-
-### Server Tools
-
-The server includes several built-in tools for call management, each implementing the new ToolEvent-based system:
-
-1. `end-call`
-   - Gracefully terminates the current call
-   - Used for normal call completion or error scenarios
-   - Uses `toolEvent.emit('crelay', endCallData)` to send termination events directly to WebSocket
-
-2. `live-agent-handoff`
-   - Transfers the call to a human agent
-   - Handles escalation scenarios
-   - Uses `toolEvent.emit('crelay', handoffData)` to send handoff events directly to WebSocket
-
-3. `send-dtmf`
-   - Sends DTMF tones during the call
-   - Useful for automated menu navigation
-   - Uses `toolEvent.emit('crelay', dtmfData)` to send DTMF events directly to WebSocket
-
-4. `send-sms`
-   - Sends SMS messages during the call
-   - Used for verification codes or follow-up information
-   - Returns a simple response for LLM conversation context
-   - Uses standard logging through the ToolEvent interface
-
-### Enhanced Tool Handling System
-
-The system implements a sophisticated tool handling mechanism that categorizes tool responses by type to determine appropriate processing:
-
-#### Tool Response Types
-
-Tools now return a structured response with `toolType` and `toolData` properties:
-
-```typescript
-interface ToolResult {
-  toolType: string;
-  toolData: any;
-}
-```
-
-The system supports four distinct tool types:
-
-1. **tool** - Standard tools that return results to be consumed by the LLM:
-   - Results are added to conversation history
-   - LLM generates a response based on the tool result
-   - Example: `send-sms` returns confirmation message
-
-2. **crelay** - Conversation Relay specific tools:
-   - Results are emitted directly to the WebSocket
-   - Bypasses LLM processing
-   - Used for direct control actions like `send-dtmf` and `end-call`
-   - ConversationRelayService listens for these events and forwards them
-
-3. **error** - Error handling responses:
-   - Error messages are added to conversation history as system messages
-   - LLM can acknowledge and respond to the error
-   - Provides graceful error handling in conversations
-
-4. **llm** - LLM controller responses (not currently implemented):
-   - Would allow tools to modify LLM behavior
-   - Reserved for future expansion
-
-#### Implementation
-
-The ResponseService processes tool results based on their type using the new Response API architecture:
-
-```typescript
-switch (toolResult.toolType) {
-  case "tool":
-    // Add function call to input messages
-    this.inputMessages.push({
-      type: 'function_call',
-      id: currentToolCall.id,
-      call_id: currentToolCall.call_id,
-      name: currentToolCall.name,
-      arguments: currentToolCall.arguments
-    });
-
-    // Add function result to input messages
-    this.inputMessages.push({
-      type: 'function_call_output',
-      call_id: currentToolCall.call_id,
-      output: JSON.stringify(toolResult.toolData)
-    });
-
-    // Create follow-up response with tool results
-    const followUpStream = await this.openai.responses.create({
-      model: this.model,
-      input: this.inputMessages,
-      tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
-      previous_response_id: this.currentResponseId,
-      stream: true,
-      store: true
-    });
-    break;
-  case "crelay":
-    // Emit directly to ConversationRelayService
-    this.emit('responseService.toolResult', toolResult);
-    break;
-  case "error":
-    // Log error - API will handle the error context
-    logError('ResponseService', `Tool error: ${toolResult.toolData}`);
-    break;
-}
-```
-
-The ConversationRelayService listens for tool results and processes them:
-
-```typescript
-this.responseService.on('responseService.toolResult', (toolResult: ToolResult) => {
-  // Check if the tool result is for the conversation relay
-  if (toolResult.toolType === "crelay") {
-    // Send the tool result to the WebSocket server
-    this.emit('conversationRelay.outgoingMessage', toolResult.toolData);
-  }
-});
-```
-
-This architecture enables:
-- Clear separation between conversation flow and direct actions
-- Proper handling of Conversation Relay specific commands
-- Flexible error handling within the conversation
-- Future extensibility for new tool types
+The server uses dependency inversion for multi LLM operators and a clean dependency injection architecture with handler interfaces for service communication.
 
 ### Server Services
 
 The server is organized into modular services:
 
-1. `ConversationRelayService`
-   - Manages the core conversation flow
-   - Handles WebSocket communication
-   - Coordinates between different services
+1. **ConversationRelayService** - Manages the core conversation flow and WebSocket communication
+2. **OpenAIResponseService** - Implements the ResponseService interface for OpenAI integration
+3. **SilenceHandler** - Manages silence detection and response with configurable thresholds
+4. **TwilioService** - Manages Twilio-specific functionality and call control operations
 
-2. `OpenAIResponseService`
-   - Implements the ResponseService interface for OpenAI integration
-   - Uses factory pattern for proper async initialization
-   - Manages GPT integration via OpenAI's Response API
-   - Handles prompt construction and response processing
-   - Implements retry logic and error handling
+### Handler Interfaces
 
-3. `SilenceHandler`
-   - Manages silence detection and response
-   - Implements configurable thresholds
-   - Handles conversation flow control
+**ResponseHandler** - Handles LLM service responses:
+```typescript
+export interface ResponseHandler {
+    content(response: ContentResponse): void;
+    toolResult(toolResult: ToolResultEvent): void;
+    error(error: Error): void;
+    callSid(callSid: string, responseMessage: any): void;
+}
+```
 
-4. `twilioService`
-   - Manages Twilio-specific functionality
-   - Handles call control operations
-   - Implements SMS and DTMF features
+**ConversationRelayHandler** - Handles conversation relay events:
+```typescript
+export interface ConversationRelayHandler {
+    outgoingMessage(message: OutgoingMessage): void;
+    callSid(callSid: string, responseMessage: any): void;
+    silence(message: OutgoingMessage): void;
+}
+```
 
-## Interrupt Handling: AbortController vs. Boolean Flag Approach
+### Service Setup
 
-The ResponseService supports interrupting ongoing AI responses to enable natural conversation flow. This reference implementation uses a simple boolean flag approach (`this.isInterrupted`) for simplicity and ease of understanding. However, for production systems, an AbortController-based approach offers significant advantages.
-
-### Current Implementation: Boolean Flag (`this.isInterrupted`)
-
-The current implementation uses a simple boolean flag to manage interrupts:
+Services use unified handler creation methods:
 
 ```typescript
-class ResponseService implements ResponseService {
-    protected isInterrupted: boolean;
+// Create service instances
+const responseService = await OpenAIResponseService.create(contextFile, toolManifest);
+const conversationRelay = new ConversationRelayService(responseService, sessionData);
 
-    interrupt(): void {
-        this.isInterrupted = true;
+// Set up response handler
+const responseHandler = {
+    content: (response) => { /* handle content */ },
+    toolResult: (toolResult) => { /* handle tool results */ },
+    error: (error) => { /* handle errors */ },
+    callSid: (callSid, responseMessage) => { /* handle call events */ }
+};
+responseService.createResponseHandler(responseHandler);
+
+// Set up conversation relay handler
+const conversationRelayHandler = {
+    outgoingMessage: (message) => ws.send(JSON.stringify(message)),
+    callSid: (callSid, responseMessage) => { /* handle call events */ },
+    silence: (silenceMessage) => ws.send(JSON.stringify(silenceMessage))
+};
+conversationRelay.createConversationRelayHandler(conversationRelayHandler);
+```
+
+### Handler Implementation
+
+Services communicate through unified handler interfaces:
+
+```typescript
+// ResponseService using unified handler
+this.responseHandler.content(response);
+this.responseHandler.toolResult(toolResult);
+this.responseHandler.error(error);
+```
+
+### Architecture Benefits
+
+#### 🚀 Performance
+- **Direct Function Calls**: Fast, direct handler invocation with minimal overhead
+- **Optimized Memory Usage**: Lightweight handler objects
+- **Low Latency**: Immediate function calls for responsive service communication
+
+#### 🛡️ Type Safety & Developer Experience
+- **Compile-Time Validation**: TypeScript enforces correct handler signatures
+- **IntelliSense Support**: Full IDE autocompletion and documentation
+- **Strong Type Contracts**: Clear, enforceable contracts between services
+
+#### 🧪 Testing & Maintainability
+- **Easy Mocking**: Simple function mocking for unit tests
+- **Clear Dependencies**: Explicit handler dependencies make service relationships transparent
+- **Better Debugging**: Direct call stacks make debugging straightforward
+
+#### 🏗️ Clean Architecture
+- **Single Responsibility**: Each handler focuses on one specific communication channel
+- **Interface Segregation**: Services only implement handlers they actually need
+- **Dependency Inversion**: Services depend on handler abstractions, not concrete implementations
+
+### TypeScript Interface Enforcement
+
+The system includes comprehensive TypeScript interfaces for all Twilio WebSocket message types:
+
+#### Outgoing Message Types
+- **`TextTokensMessage`**: For sending text to be converted to speech
+- **`PlayMediaMessage`**: For playing audio from URLs
+- **`SendDigitsMessage`**: For sending DTMF digits
+- **`SwitchLanguageMessage`**: For changing TTS and transcription languages
+- **`EndSessionMessage`**: For terminating conversation sessions
+
+These are unified under the `OutgoingMessage` union type, ensuring compile-time validation:
+
+```typescript
+const textMessage: TextTokensMessage = {
+    type: 'text',
+    token: 'Hello, how can I help you?',
+    last: true,
+    interruptible: true
+};
+
+await conversationRelaySession.outgoingMessage(textMessage);
+```
+
+### Enhanced Tool Handling System
+
+The system implements a sophisticated tool handling mechanism that categorizes tool responses by type:
+
+#### Tool Response Types
+
+1. **tool** - Standard tools that return results to be consumed by the LLM
+2. **crelay** - Conversation Relay specific tools that bypass LLM processing  
+3. **error** - Error handling responses
+4. **llm** - LLM controller responses (reserved for future expansion)
+
+Tools now use the ToolEvent system to emit events and return simple responses:
+
+```typescript
+export default function (functionArguments: ToolArguments, toolEvent?: ToolEvent): ToolResponse {
+    // Tool logic here
+    
+    if (toolEvent) {
+        toolEvent.emit('crelay', {
+            type: "action",
+            data: actionData
+        });
+        toolEvent.log(`Action completed: ${JSON.stringify(actionData)}`);
     }
+    
+    return {
+        success: true,
+        message: "Action completed successfully"
+    };
+}
+```
 
-    resetInterrupt(): void {
-        this.isInterrupted = false;
-    }
+### Interrupt Handling
 
-    private async processStream(stream: any): Promise<void> {
-        for await (const event of stream) {
-            if (this.isInterrupted) {
-                break;  // Exit the loop when interrupted
-            }
-            // Process events...
+The ResponseService supports interrupting ongoing AI responses using a boolean flag approach for simplicity:
+
+```typescript
+interrupt(): void {
+    this.isInterrupted = true;
+}
+
+private async processStream(stream: any): Promise<void> {
+    for await (const event of stream) {
+        if (this.isInterrupted) {
+            break;  // Exit when interrupted
         }
+        // Process events...
     }
 }
 ```
 
-**Advantages of Boolean Flag Approach:**
-- **Simplicity**: Easy to understand and implement
-- **Minimal Dependencies**: No additional APIs or concepts required
-- **Educational Value**: Clear demonstration of interrupt logic
-- **Low Overhead**: Minimal performance impact
-- **Synchronous**: No async complications in interrupt handling
-
-**Limitations of Boolean Flag Approach:**
-- **Manual Management**: Requires explicit reset before each operation
-- **No Native Integration**: Cannot integrate with native APIs that support AbortSignal
-- **Resource Cleanup**: No automatic cleanup of related resources
-- **Limited Scope**: Only works within the application's polling loop
-- **Race Conditions**: Potential timing issues in concurrent scenarios
-
-### Production Alternative: AbortController Approach
-
-The AbortController approach provides a more robust and standards-compliant interrupt mechanism:
-
-```typescript
-class ResponseService implements ResponseService {
-    protected abortController: AbortController | null;
-
-    interrupt(): void {
-        if (this.abortController) {
-            this.abortController.abort();
-        }
-    }
-
-    private async processStream(stream: any): Promise<void> {
-        // Create new AbortController for this operation
-        this.abortController = new AbortController();
-
-        // Pass abort signal to OpenAI API
-        const followUpStream = await this.openai.responses.create(
-            completionParams,
-            {
-                signal: this.abortController.signal  // Native API integration
-            }
-        );
-
-        // No manual checking required - API handles abortion internally
-        for await (const event of followUpStream) {
-            // Events automatically stop when aborted
-            // Process events...
-        }
-    }
-}
-```
-
-**Advantages of AbortController Approach:**
-- **Native API Integration**: Directly supported by fetch(), OpenAI client, and other modern APIs
-- **Automatic Resource Cleanup**: APIs handle cleanup when signal is aborted
-- **Standards Compliant**: Web standard supported across browsers and Node.js
-- **Better Performance**: No manual polling required - APIs check signal internally
-- **Immediate Cancellation**: Operations can stop immediately rather than waiting for next loop iteration
-- **Built-in Race Condition Protection**: AbortSignal state is managed atomically
-- **Event-Based**: Can listen for abort events for custom cleanup logic
-
-**Implementation Differences:**
-
-| Aspect | Boolean Flag | AbortController |
-|--------|-------------|-----------------|
-| **API Integration** | Manual checking in loops | Native support in fetch/HTTP APIs |
-| **Resource Cleanup** | Manual cleanup required | Automatic when signal aborted |
-| **Performance** | Polling overhead | Event-driven, no polling |
-| **Timing** | Checked at loop iterations | Immediate cancellation possible |
-| **Standards** | Custom implementation | Web/Node.js standard |
-| **Error Handling** | Manual error states | Built-in AbortError handling |
-
-### Performance Considerations
-
-**Boolean Flag:**
-- Minimal CPU overhead for simple boolean checks
-- Requires polling on each iteration of processing loops
-- Cannot interrupt long-running operations between checks
-- Memory usage: single boolean per service instance
-
-**AbortController:**
-- Higher initial overhead (object creation, event system)
-- More efficient for long-running operations (no polling)
-- Can interrupt operations immediately when APIs support it
-- Memory usage: AbortController object + potential listeners
-
-### Production Recommendations
-
-**Use Boolean Flag When:**
-- Building educational/reference implementations
-- System simplicity is the primary goal
-- Working with APIs that don't support AbortSignal
-- Performance overhead of AbortController is a concern
-- Team is unfamiliar with AbortController concepts
-
-**Use AbortController When:**
-- Building production systems with reliability requirements
-- Integrating with modern APIs that support AbortSignal
-- Need immediate cancellation of network operations
-- Want standards-compliant interrupt handling
-- Require automatic resource cleanup
-- Building systems that may scale to handle many concurrent operations
-
-### Migration Path
-
-To upgrade from the boolean flag to AbortController approach:
-
-1. **Replace boolean flag with AbortController:**
-   ```typescript
-   // Replace: protected isInterrupted: boolean;
-   protected abortController: AbortController | null;
-   ```
-
-2. **Update interrupt method:**
-   ```typescript
-   interrupt(): void {
-       if (this.abortController) {
-           this.abortController.abort();
-       }
-   }
-   ```
-
-3. **Remove manual reset calls:**
-   ```typescript
-   // Remove: this.resetInterrupt();
-   // AbortController creates new instance for each operation
-   ```
-
-4. **Add signal to API calls:**
-   ```typescript
-   const stream = await this.openai.responses.create(params, {
-       signal: this.abortController.signal
-   });
-   ```
-
-5. **Remove manual interrupt checks:**
-   ```typescript
-   // Remove: if (this.isInterrupted) break;
-   // API handles interruption automatically
-   ```
-
-### Conclusion
-
-This reference implementation uses the boolean flag approach to maintain simplicity and educational clarity. The concept of interrupting AI responses is more important than the specific implementation mechanism. For production systems requiring robust interrupt handling, consider migrating to the AbortController approach to leverage native API support, automatic resource cleanup, and improved performance characteristics.

@@ -7,18 +7,15 @@
  */
 
 import { logOut, logError } from '../utils/logger.js';
-import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, ContentHandler, ToolResultHandler, ErrorHandler } from '../interfaces/ResponseService.js';
+import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, ResponseHandler } from '../interfaces/ResponseService.js';
 
 class FlowiseResponseService implements ResponseService {
     private contextFile: string;
     private toolManifestFile: string;
     private isInterrupted: boolean;
 
-    // Handler functions
-    private contentHandler?: ContentHandler;
-    private toolResultHandler?: ToolResultHandler;
-    private errorHandler?: ErrorHandler;
-    private callSidHandler?: (callSid: string, responseMessage: any) => void;
+    // Unified response handler
+    private responseHandler!: ResponseHandler;
 
     /**
      * Private constructor for FlowiseResponseService instance.
@@ -47,31 +44,12 @@ class FlowiseResponseService implements ResponseService {
     }
 
     /**
-     * Sets the content handler for response chunks
+     * Creates and sets up the response handler for the service
+     * 
+     * @param handler - Unified handler for all response events
      */
-    setContentHandler(handler: ContentHandler): void {
-        this.contentHandler = handler;
-    }
-
-    /**
-     * Sets the tool result handler for tool execution results
-     */
-    setToolResultHandler(handler: ToolResultHandler): void {
-        this.toolResultHandler = handler;
-    }
-
-    /**
-     * Sets the error handler for error events
-     */
-    setErrorHandler(handler: ErrorHandler): void {
-        this.errorHandler = handler;
-    }
-
-    /**
-     * Sets the call SID handler for call-specific events
-     */
-    setCallSidHandler(handler: (callSid: string, responseMessage: any) => void): void {
-        this.callSidHandler = handler;
+    createResponseHandler(handler: ResponseHandler): void {
+        this.responseHandler = handler;
     }
 
     /**
@@ -90,7 +68,7 @@ class FlowiseResponseService implements ResponseService {
 
             // TODO: Implement actual Flowise API integration
             // For now, call handler with a stub response
-            this.contentHandler?.({
+            this.responseHandler.content({
                 type: 'text',
                 token: '[FlowiseResponseService Stub Response]',
                 last: true
@@ -99,7 +77,7 @@ class FlowiseResponseService implements ResponseService {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             logError('FlowiseResponseService', `Error in generateResponse: ${errorMessage}`);
-            this.errorHandler?.(error as Error);
+            this.responseHandler.error(error as Error);
         }
     }
 
@@ -170,11 +148,7 @@ class FlowiseResponseService implements ResponseService {
      */
     cleanup(): void {
         logOut('FlowiseResponseService', 'Cleaning up service resources');
-        // Clear handlers instead of removing listeners
-        this.contentHandler = undefined;
-        this.toolResultHandler = undefined;
-        this.errorHandler = undefined;
-        this.callSidHandler = undefined;
+        // Handler cleanup is managed by the calling code
         this.isInterrupted = true;
         // TODO: Implement cleanup of any Flowise connections or resources
     }

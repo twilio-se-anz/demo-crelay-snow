@@ -2,6 +2,53 @@
 
 ## Release v4.2.1
 
+### Unified Handler Architecture Refactoring
+
+#### Consolidated Handler Interfaces
+- **Unified ResponseHandler**: Replaced 4 individual setter methods (`setContentHandler`, `setToolResultHandler`, `setErrorHandler`, `setCallSidHandler`) with single `createResponseHandler(handler: ResponseHandler)` method
+- **Unified ConversationRelayHandler**: Replaced 3 individual setter methods (`setOutgoingMessageHandler`, `setCallSidEventHandler`, `setSilenceEventHandler`) with single `createConversationRelayHandler(handler: ConversationRelayHandler)` method
+- **Better Encapsulation**: Handler methods now use clean names like `content()`, `toolResult()`, `error()`, `callSid()` instead of event-style naming
+
+#### Interface Architecture Improvements
+- **ResponseHandler Interface**: Created unified interface with `content()`, `toolResult()`, `error()`, and `callSid()` methods
+- **ConversationRelayHandler Interface**: Created unified interface with `outgoingMessage()`, `callSid()`, and `silence()` methods
+- **Eliminated Circular Dependencies**: Removed circular dependency issues by using `createResponseHandler()` method instead of constructor injection
+
+#### Service Implementation Updates
+- **OpenAIResponseService**: Updated to use single `responseHandler` property and `createResponseHandler()` method
+- **FlowiseResponseService**: Updated to use unified handler pattern for consistency
+- **ConversationRelayService**: Updated to create unified handler objects and use `createConversationRelayHandler()` method
+- **Server.ts Integration**: Updated WebSocket server to use unified handler objects instead of individual setter calls
+
+#### Dependency Injection Enhancements
+- **Cleaner Constructor Pattern**: Services now accept handlers through create methods rather than multiple setter calls
+- **Better Type Safety**: Unified handlers provide stronger type contracts and better IntelliSense support
+- **Simplified Service Setup**: Single handler object creation replaces multiple handler registration calls
+- **Improved Maintainability**: Related handler methods are now grouped together in single interfaces
+
+### Benefits of Unified Handler Architecture
+
+#### Code Organization
+- **Better Cohesion**: All related handler methods grouped in single interface objects
+- **Cleaner APIs**: Single `createXxxHandler()` method instead of multiple setters eliminates setup complexity
+- **Reduced Coupling**: Handler interfaces are self-contained and don't require multiple method calls
+
+#### Developer Experience
+- **Simplified Setup**: Single handler object creation replaces multiple setter method calls
+- **Better Type Safety**: Unified interfaces provide comprehensive type checking for all handler methods
+- **Enhanced IntelliSense**: IDE support improved with consolidated handler method definitions
+- **Cleaner Dependencies**: Clear handler contracts make service relationships more transparent
+
+#### Architectural Benefits
+- **Eliminated Circular Dependencies**: `createResponseHandler()` pattern prevents construction-time circular dependency issues
+- **Single Responsibility**: Each handler interface focuses on one specific communication domain
+- **Better Separation of Concerns**: Clear distinction between different types of handler responsibilities
+- **Future Extensibility**: Unified pattern makes it easier to add new handler methods without interface proliferation
+
+This refactoring maintains full backward compatibility while providing a cleaner, more maintainable dependency injection architecture that eliminates multiple setter methods in favor of consolidated handler objects.
+
+## Release v4.2.1 (Previous)
+
 ### Handler Type Organization Refactoring
 
 #### Handler Type Relocation

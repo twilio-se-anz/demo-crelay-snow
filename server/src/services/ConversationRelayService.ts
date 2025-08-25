@@ -72,7 +72,8 @@ import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
 import { ResponseService } from '../interfaces/ResponseService.js';
 import { OpenAIResponseService } from './OpenAIResponseService.js';
-import { OutgoingMessageHandler, CallSidEventHandler, SilenceEventHandler } from '../interfaces/ConversationRelay.js';
+import { ConversationRelayHandler } from '../interfaces/ConversationRelay.js';
+import { ResponseHandler } from '../interfaces/ResponseService.js';
 import type { SessionData, IncomingMessage, OutgoingMessage, ConversationRelay } from '../interfaces/ConversationRelay.js';
 
 class ConversationRelayService implements ConversationRelay {
@@ -82,10 +83,8 @@ class ConversationRelayService implements ConversationRelay {
     private logMessage: string | null;
     private accumulatedTokens: string;
 
-    // Handler functions
-    private outgoingMessageHandler?: OutgoingMessageHandler;
-    private callSidEventHandler?: CallSidEventHandler;
-    private silenceEventHandler?: SilenceEventHandler;
+    // Unified conversation relay handler
+    private conversationRelayHandler!: ConversationRelayHandler;
 
     /**
      * Creates a new ConversationRelayService instance using the factory method.
@@ -101,65 +100,63 @@ class ConversationRelayService implements ConversationRelay {
         this.silenceHandler = new SilenceHandler();
         this.logMessage = null;     // Utility log message
         this.accumulatedTokens = '';// Utility to show tokens as a Message in logging
-
-        // Set up response handlers for LLM responses using dependency injection
-        this.responseService.setContentHandler((response) => {
-            if (!response.last) {
-                // Accumulate tokens while last is false
-                this.accumulatedTokens += response.token || '';
-            } else {
-                // Display complete accumulated message when last becomes true
-                logOut(`Conversation Relay`, `Complete response: "${this.accumulatedTokens}"`);
-
-                // Reset accumulated tokens for next response
-                this.accumulatedTokens = '';
-            }
-            // Convert ContentResponse to OutgoingMessage format
-            const outgoingMessage: OutgoingMessage = {
-                type: 'text',
-                token: response.token,
-                last: response.last
-            };
-            this.outgoingMessageHandler?.(outgoingMessage);
-        });
-
-        // Check the tool call result if for CR specific tool calls, as these need to be sent to the WS server
-        this.responseService.setToolResultHandler((toolResult) => {
-            logOut(`Conversation Relay`, `Tool result received: ${JSON.stringify(toolResult)}`);
-            // Check if the tool result is for the conversation relay
-            if (toolResult.toolType === "crelay") {
-                // Send the tool result to the WS server
-                this.outgoingMessageHandler?.(toolResult.toolData);
-            }
-        });
-
-        // Set up error handler for ResponseService errors
-        this.responseService.setErrorHandler((error) => {
-            logError(`Conversation Relay`, `ResponseService error: ${error.message}`);
-            // Could emit an error event or handle it appropriately
-        });
+        
         logOut(`Conversation Relay`, `Service constructed`);
     }
 
     /**
-     * Sets the outgoing message handler for sending messages to WebSocket client
+     * Creates a unified response handler implementing ResponseHandler interface
      */
-    setOutgoingMessageHandler(handler: OutgoingMessageHandler): void {
-        this.outgoingMessageHandler = handler;
+    private createResponseHandler(): ResponseHandler {
+        return {
+            content: (response) => {
+                if (!response.last) {
+                    // Accumulate tokens while last is false
+                    this.accumulatedTokens += response.token || '';
+                } else {
+                    // Display complete accumulated message when last becomes true
+                    logOut(`Conversation Relay`, `Complete response: "${this.accumulatedTokens}"`);
+
+                    // Reset accumulated tokens for next response
+                    this.accumulatedTokens = '';
+                }
+                // Convert ContentResponse to OutgoingMessage format
+                const outgoingMessage: OutgoingMessage = {
+                    type: 'text',
+                    token: response.token,
+                    last: response.last
+                };
+                this.conversationRelayHandler.outgoingMessage(outgoingMessage);
+            },
+
+            toolResult: (toolResult) => {
+                logOut(`Conversation Relay`, `Tool result received: ${JSON.stringify(toolResult)}`);
+                // Check if the tool result is for the conversation relay
+                if (toolResult.toolType === "crelay") {
+                    // Send the tool result to the WS server
+                    this.conversationRelayHandler.outgoingMessage(toolResult.toolData);
+                }
+            },
+
+            error: (error) => {
+                logError(`Conversation Relay`, `ResponseService error: ${error.message}`);
+                // Could emit an error event or handle it appropriately
+            },
+
+            callSid: (callSid, responseMessage) => {
+                logOut('Conversation Relay', `Got a call SID event: ${callSid}, ${JSON.stringify(responseMessage)}`);
+                this.conversationRelayHandler.callSid(callSid, responseMessage);
+            }
+        };
     }
 
     /**
-     * Sets the call SID event handler for call-specific events
+     * Creates and sets up the conversation relay handler for the service
+     * 
+     * @param handler - Unified handler for all conversation relay events
      */
-    setCallSidEventHandler(handler: CallSidEventHandler): void {
-        this.callSidEventHandler = handler;
-    }
-
-    /**
-     * Sets the silence event handler for silence detection events
-     */
-    setSilenceEventHandler(handler: SilenceEventHandler): void {
-        this.silenceEventHandler = handler;
+    createConversationRelayHandler(handler: ConversationRelayHandler): void {
+        this.conversationRelayHandler = handler;
     }
 
     /**
@@ -181,16 +178,11 @@ class ConversationRelayService implements ConversationRelay {
         logOut('Conversation Relay', 'Creating OpenAI Response Service');
         try {
             const responseService = await OpenAIResponseService.create(contextFile, toolManifestFile);
-
             const instance = new ConversationRelayService(responseService, sessionData);
-
-            // Set up call SID handler if provided
-            if (callSid) {
-                responseService.setCallSidHandler((receivedCallSid: string, responseMessage: any) => {
-                    logOut('Conversation Relay', `Got a call SID event: ${receivedCallSid}, ${JSON.stringify(responseMessage)}`);
-                    instance.callSidEventHandler?.(receivedCallSid, responseMessage);
-                });
-            }
+            
+            // Create and set up the response handler
+            const responseHandler = instance.createResponseHandler();
+            responseService.createResponseHandler(responseHandler);
 
             return instance;
         } catch (error) {
@@ -229,7 +221,7 @@ class ConversationRelayService implements ConversationRelay {
                 }
                 // Convert SilenceHandlerMessage to OutgoingMessage and use handler
                 const outgoingMessage: OutgoingMessage = silenceMessage as OutgoingMessage;
-                this.silenceEventHandler?.(outgoingMessage);
+                this.conversationRelayHandler.silence(outgoingMessage);
             });
         }
 
@@ -304,7 +296,7 @@ class ConversationRelayService implements ConversationRelay {
     async outgoingMessage(message: OutgoingMessage): Promise<void> {
         try {
             logOut(`Conversation Relay`, `${this.logMessage} Outgoing structured message: ${JSON.stringify(message)}`);
-            this.outgoingMessageHandler?.(message);
+            this.conversationRelayHandler.outgoingMessage(message);
         } catch (error) {
             logError(`Conversation Relay`, `${this.logMessage} Error in outgoing message handling: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
@@ -362,10 +354,7 @@ class ConversationRelayService implements ConversationRelay {
         if (this.responseService) {
             this.responseService.cleanup();
         }
-        // Clear handlers
-        this.outgoingMessageHandler = undefined;
-        this.callSidEventHandler = undefined;
-        this.silenceEventHandler = undefined;
+        // Handler cleanup is managed by the calling code
     }
 }
 

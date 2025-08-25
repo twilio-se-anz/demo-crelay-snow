@@ -1,18 +1,11 @@
 /**
- * Handler function type for outgoing messages from ConversationRelay services
+ * Unified conversation relay handler interface for dependency injection
  */
-export type OutgoingMessageHandler = (message: OutgoingMessage) => void;
-
-/**
- * Handler function type for call SID specific events from LLM services
- */
-export type CallSidEventHandler = (callSid: string, responseMessage: any) => void;
-
-/**
- * Handler function type for silence events from ConversationRelay services
- * Handles both silence breaker messages and call termination messages
- */
-export type SilenceEventHandler = (message: OutgoingMessage) => void;
+export interface ConversationRelayHandler {
+    outgoingMessage(message: OutgoingMessage): void;
+    callSid(callSid: string, responseMessage: any): void;
+    silence(message: OutgoingMessage): void;
+}
 
 /**
  * Interface for session data
@@ -155,11 +148,11 @@ export type OutgoingMessage = TextTokensMessage | PlayMediaMessage | SendDigitsM
 export interface ConversationRelay {
 
     /**
-     * Handler setters - called once during setup to register event handlers
+     * Creates and sets up the conversation relay handler for the service
+     * 
+     * @param handler - Unified handler for all conversation relay events
      */
-    setOutgoingMessageHandler(handler: OutgoingMessageHandler): void;
-    setCallSidEventHandler(handler: CallSidEventHandler): void;
-    setSilenceEventHandler(handler: SilenceEventHandler): void;
+    createConversationRelayHandler(handler: ConversationRelayHandler): void;
 
     /**
      * Initializes a new conversation relay session
@@ -208,9 +201,7 @@ export declare class ConversationRelayService implements ConversationRelay {
         callSid?: string
     ): Promise<ConversationRelayService>;
 
-    setOutgoingMessageHandler(handler: OutgoingMessageHandler): void;
-    setCallSidEventHandler(handler: CallSidEventHandler): void;
-    setSilenceEventHandler(handler: SilenceEventHandler): void;
+    createConversationRelayHandler(handler: ConversationRelayHandler): void;
     setupMessage(sessionData: SessionData): Promise<void>;
     incomingMessage(message: IncomingMessage): Promise<void>;
     outgoingMessage(message: OutgoingMessage): Promise<void>;

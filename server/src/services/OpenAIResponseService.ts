@@ -63,7 +63,7 @@ import { dirname } from 'path';
 import type { ResponseInput, ResponseStreamEvent } from 'openai/resources/responses/responses.mjs';
 
 import { logOut, logError } from '../utils/logger.js';
-import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, ContentHandler, ToolResultHandler, ErrorHandler } from '../interfaces/ResponseService.js';
+import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, ResponseHandler } from '../interfaces/ResponseService.js';
 
 dotenv.config();
 
@@ -104,11 +104,8 @@ class OpenAIResponseService implements ResponseService {
     protected loadedTools: Record<string, ToolFunction>;
     protected inputMessages: ResponseInput;
 
-    // Handler functions
-    private contentHandler?: (response: ContentResponse) => void;
-    private toolResultHandler?: (toolResult: ToolResultEvent) => void;
-    private errorHandler?: (error: Error) => void;
-    private callSidHandler?: (callSid: string, responseMessage: any) => void;
+    // Unified response handler
+    private responseHandler!: ResponseHandler;
 
     /**
      * Private constructor for ResponseService instance.
@@ -144,25 +141,12 @@ class OpenAIResponseService implements ResponseService {
     }
 
     /**
-     * Sets the content, result and error handlers
+     * Creates and sets up the response handler for the service
+     * 
+     * @param handler - Unified handler for all response events
      */
-    setContentHandler(handler: ContentHandler): void {
-        this.contentHandler = handler;
-    }
-
-    setToolResultHandler(handler: ToolResultHandler): void {
-        this.toolResultHandler = handler;
-    }
-
-    setErrorHandler(handler: ErrorHandler): void {
-        this.errorHandler = handler;
-    }
-
-    /**
-     * Sets the call SID handler for call-specific events
-     */
-    setCallSidHandler(handler: (callSid: string, responseMessage: any) => void): void {
-        this.callSidHandler = handler;
+    createResponseHandler(handler: ResponseHandler): void {
+        this.responseHandler = handler;
     }
 
     /**
@@ -171,7 +155,7 @@ class OpenAIResponseService implements ResponseService {
     private createToolEvent(): ToolEvent {
         return {
             emit: (eventType: string, data: any) => {
-                this.toolResultHandler?.({
+                this.responseHandler.toolResult({
                     toolType: eventType,
                     toolData: data
                 } as ToolResultEvent);
@@ -368,10 +352,7 @@ class OpenAIResponseService implements ResponseService {
      */
     cleanup(): void {
         // Clear handlers instead of removing listeners
-        this.contentHandler = undefined;
-        this.toolResultHandler = undefined;
-        this.errorHandler = undefined;
-        this.callSidHandler = undefined;
+        // Handler cleanup is managed by the calling code
     }
 
     /**
@@ -395,7 +376,7 @@ class OpenAIResponseService implements ResponseService {
                     // Text content streaming
                     const content = eventData.delta || '';
                     if (content) {
-                        this.contentHandler?.({
+                        this.responseHandler.content({
                             type: "text",
                             token: content,
                             last: false
@@ -475,7 +456,7 @@ class OpenAIResponseService implements ResponseService {
                     // Only emit final content marker if this is the end of the conversation
                     // (not if we're about to create a follow-up for tool results)
                     if (!currentToolCall) {
-                        this.contentHandler?.({
+                        this.responseHandler.content({
                             type: "text",
                             token: '',
                             last: true
@@ -562,7 +543,7 @@ class OpenAIResponseService implements ResponseService {
             await this.processStream(stream);
 
         } catch (error) {
-            this.errorHandler?.(error as Error);
+            this.responseHandler.error(error as Error);
             throw error;
         }
     }
