@@ -127,7 +127,7 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
                 // Set up unified conversation relay handler
                 conversationRelaySession.createConversationRelayHandler({
                     outgoingMessage: (outgoingMessage: OutgoingMessage) => {
-                        logOut('WS', `Sending crelay message to WebSocket: ${JSON.stringify(outgoingMessage)}`);
+                        logOut('WS', `Sending outgoing message to WebSocket: ${JSON.stringify(outgoingMessage)}`);
                         ws.send(JSON.stringify(outgoingMessage));
                     },
                     callSid: (callSid: string, responseMessage: any) => {

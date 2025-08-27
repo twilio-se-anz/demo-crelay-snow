@@ -50,9 +50,9 @@
  * const responseService = new LlmService();
  * const relayService = new ConversationRelayService(responseService);
  * 
- * // Set up event handlers
- * relayService.on('conversationRelay.response', (response) => {
- *   console.log('LLM Response:', response);
+ * // Set up response handler
+ * relayService.createConversationRelayHandler({
+ *   outgoingMessage: (message) => console.log('Outgoing:', message)
  * });
  * 
  * // Start conversation
@@ -82,6 +82,7 @@ class ConversationRelayService implements ConversationRelay {
     private silenceHandler: SilenceHandler | null;
     private logMessage: string | null;
     private accumulatedTokens: string;
+    private pendingTerminalMessage: OutgoingMessage | null = null;
 
     // Unified conversation relay handler
     private conversationRelayHandler!: ConversationRelayHandler;
@@ -119,6 +120,13 @@ class ConversationRelayService implements ConversationRelay {
 
                     // Reset accumulated tokens for next response
                     this.accumulatedTokens = '';
+                    
+                    // Check if we have a pending terminal message to send after response completion
+                    if (this.pendingTerminalMessage) {
+                        logOut(`Conversation Relay`, `Sending delayed terminal message: ${JSON.stringify(this.pendingTerminalMessage)}`);
+                        this.conversationRelayHandler.outgoingMessage(this.pendingTerminalMessage);
+                        this.pendingTerminalMessage = null;
+                    }
                 }
                 // Convert ContentResponse to OutgoingMessage format
                 const outgoingMessage: OutgoingMessage = {
@@ -131,16 +139,51 @@ class ConversationRelayService implements ConversationRelay {
 
             toolResult: (toolResult: ToolResultEvent) => {
                 logOut(`Conversation Relay`, `Tool result received: ${JSON.stringify(toolResult)}`);
-                // Check if the tool result is for the conversation relay
-                if (toolResult.toolType === "crelay") {
-                    // Send the tool result to the WS server
-                    this.conversationRelayHandler.outgoingMessage(toolResult.toolData);
+                
+                // Handle tool results from OpenAI Response Service
+                // toolType is the tool name (send-dtmf, end-call, etc.), toolData is the ToolResult
+                const toolData = toolResult.toolData;
+                
+                // Check if tool returned an outgoing message
+                if (toolData && toolData.outgoingMessage) {
+                    const outgoingMsg = toolData.outgoingMessage as OutgoingMessage;
+                    
+                    // Route based on OutgoingMessage type
+                    switch (outgoingMsg.type) {
+                        case "end":
+                            // Terminal messages: Store to send after OpenAI response completion
+                            this.pendingTerminalMessage = outgoingMsg;
+                            logOut(`Conversation Relay`, `Storing terminal message for later: ${JSON.stringify(outgoingMsg)}`);
+                            break;
+                        
+                        case "sendDigits":
+                            // Immediate action: Send DTMF digits right away
+                            this.conversationRelayHandler.outgoingMessage(outgoingMsg);
+                            logOut(`Conversation Relay`, `Sending DTMF digits immediately: ${JSON.stringify(outgoingMsg)}`);
+                            break;
+                            
+                        case "play":
+                        case "language":
+                            // Other immediate action messages: Send right away
+                            this.conversationRelayHandler.outgoingMessage(outgoingMsg);
+                            logOut(`Conversation Relay`, `Sending immediate message: ${JSON.stringify(outgoingMsg)}`);
+                            break;
+                            
+                        case "text":
+                            // Text messages: Let OpenAI handle normally (no special routing)
+                            logOut(`Conversation Relay`, `Text message - letting OpenAI handle response`);
+                            break;
+                            
+                        default:
+                            logOut(`Conversation Relay`, `Unknown outgoing message type: ${(outgoingMsg as any).type}`);
+                            break;
+                    }
                 }
             },
 
             error: (error: Error) => {
                 logError(`Conversation Relay`, `ResponseService error: ${error.message}`);
-                // Could emit an error event or handle it appropriately
+                // Error handling - could be enhanced as needed
             },
 
             callSid: (callSid: string, responseMessage: any) => {
@@ -198,7 +241,7 @@ class ConversationRelayService implements ConversationRelay {
      * 
      * @async
      * @param {SessionData} sessionData - Session and parameter information
-     * @emits conversationRelay.silence
+     * @calls conversationRelayHandler.silence for silence events
      * @returns {Promise<void>} Resolves when setup is complete
      */
     async setupMessage(sessionData: SessionData): Promise<void> {
@@ -210,7 +253,7 @@ class ConversationRelayService implements ConversationRelay {
         const initialMessage = `These are all the details of the call: ${JSON.stringify(setupData, null, 4)} and the parameter data needed to complete your objective: ${JSON.stringify(parameterData, null, 4)}. Use this to complete your objective`;
         await this.responseService.insertMessage('system', initialMessage);
 
-        // Initialize and start silence monitoring. When triggered it will emit a 'silence' event with a message
+        // Initialize and start silence monitoring. When triggered it will call the silence handler with a message
         if (this.silenceHandler) {
             this.silenceHandler.startMonitoring((silenceMessage) => {
                 // Add callSid to silence message if it's a text message
@@ -239,7 +282,7 @@ class ConversationRelayService implements ConversationRelay {
      * 
      * @async
      * @param {IncomingMessage} message - Incoming message object
-     * @emits conversationRelay.prompt
+     * @calls responseService.generateResponse for voice prompts
      * @throws {Error} If message handling fails
      * @returns {Promise<void>} Resolves when message is processed
      */
@@ -289,7 +332,7 @@ class ConversationRelayService implements ConversationRelay {
      * 
      * @async
      * @param {OutgoingMessage} message - Structured outgoing message object
-     * @emits conversationRelay.outgoingMessage
+     * @calls conversationRelayHandler.outgoingMessage
      * @throws {Error} If message handling fails
      * @returns {Promise<void>} Resolves when message is processed
      */

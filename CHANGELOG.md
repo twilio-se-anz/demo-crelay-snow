@@ -1,5 +1,66 @@
 # Changelog
 
+## Release v4.3.0
+
+### Tool Type-Driven Architecture Migration
+
+#### Complete Event-Driven to Tool Type-Driven Transformation
+- **Architectural Paradigm Shift**: Migrated from event-driven tool system to pure tool type-driven architecture using OutgoingMessage types
+- **Enhanced Type Safety**: Replaced generic "crelay" routing with specific OutgoingMessage type-based routing (`sendDigits`, `end`, `text`, etc.)
+- **Terminal Tool Timing Fix**: Implemented proper timing for terminal tools to ensure OpenAI response is delivered before call termination
+- **Clean Separation of Concerns**: Eliminated all remaining event-driven concepts from tool execution and response handling
+
+#### Tool Response Architecture Overhaul
+- **OutgoingMessage Integration**: CRelay-specific tools now return proper `OutgoingMessage` types directly in their response
+- **Generic vs. CRelay Tools**: Clear distinction between generic LLM tools (send-sms) and CRelay-specific tools (send-dtmf, end-call, live-agent-handoff)
+- **Type-Driven Routing**: ConversationRelayService routes based on `outgoingMessage.type` instead of generic event types
+- **Interface Imports**: CRelay tools import OutgoingMessage interfaces while generic tools remain dependency-free
+
+#### Tool Response Pattern Updates
+- **send-dtmf.ts**: Returns `SendDigitsMessage` type with immediate WebSocket delivery
+- **end-call.ts**: Returns `EndSessionMessage` type with delayed delivery after OpenAI response
+- **live-agent-handoff.ts**: Returns `EndSessionMessage` type with delayed delivery after OpenAI response  
+- **send-sms.ts**: Remains generic tool with no OutgoingMessage dependencies
+
+#### Service Architecture Clean-Up
+- **OpenAIResponseService**: Completely agnostic about ConversationRelay concepts, passes all tool results generically
+- **ConversationRelayService**: Contains all OutgoingMessage knowledge and routing logic based on message types
+- **Terminal Message Timing**: Proper sequencing ensures user hears confirmation before call ends for terminal actions
+
+#### Routing Logic Implementation
+- **Immediate Delivery**: `sendDigits`, `play`, `language` types sent immediately to WebSocket
+- **Delayed Delivery**: `end` type stored and sent after OpenAI response completion (`response.last === true`)
+- **Standard Processing**: `text` type and tools without outgoingMessage processed normally by OpenAI
+- **Type-Safe Switching**: Comprehensive switch statement handles all OutgoingMessage types appropriately
+
+#### Code Cleanup and Documentation
+- **Removed Event Remnants**: Eliminated all remaining references to event emission and "crelay" terminology
+- **Updated Documentation**: Changed `@emits` to `@calls` throughout service documentation
+- **Interface Cleanup**: Removed obsolete `crelayData` field from ToolResult interface
+- **Comment Updates**: Updated all comments to reflect dependency injection patterns instead of event-driven patterns
+
+### Benefits of Tool Type-Driven Architecture
+
+#### Architectural Improvements
+- **Pure Dependency Injection**: Complete elimination of event system in favor of direct function calls
+- **Type-Safe Routing**: OutgoingMessage types provide compile-time safety for WebSocket message handling
+- **Clear Tool Categories**: Explicit separation between generic LLM tools and conversation relay tools
+- **Proper Timing Control**: Terminal tools now deliver responses before ending calls
+
+#### Developer Experience
+- **Better Type Safety**: OutgoingMessage interfaces provide full IntelliSense and compile-time checking
+- **Cleaner Tool Development**: Clear patterns for different tool types with proper interface imports
+- **Reduced Complexity**: Eliminated event system complexity in favor of straightforward return value routing
+- **Enhanced Debugging**: Type-driven routing makes message flow easier to trace and debug
+
+#### Performance & Reliability
+- **Eliminated Event Overhead**: Direct function calls replace event emission for better performance
+- **Proper Terminal Timing**: Users now hear confirmation messages before calls end for better UX
+- **Reduced Memory Usage**: No event listener registration or cleanup overhead
+- **Type Safety**: Compile-time validation prevents runtime routing errors
+
+This migration represents the final step in moving from event-driven to pure dependency injection architecture, providing a clean, type-safe, and maintainable foundation for tool development and message routing.
+
 ## Release v4.2.1
 
 ### Unified Handler Architecture Refactoring

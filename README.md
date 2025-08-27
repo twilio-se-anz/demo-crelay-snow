@@ -2,9 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts.
 
-## Release v4.2.1
+## Release v4.3.0
 
-This release introduces significant architectural improvements with unified handler interfaces that consolidate multiple setter methods into single handler objects. The system now uses `ResponseHandler` and `ConversationRelayHandler` unified interfaces instead of separate setter methods, providing cleaner dependency injection, better encapsulation, and simplified service initialization. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
+This release completes the migration from event-driven to pure tool type-driven architecture using OutgoingMessage types. The system now uses type-safe routing based on OutgoingMessage types (`sendDigits`, `end`, `text`) instead of generic event handling, with proper timing control for terminal tools to ensure OpenAI responses are delivered before call termination. CRelay-specific tools import OutgoingMessage interfaces while generic LLM tools remain dependency-free, providing clean separation of concerns and enhanced type safety. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
 ## Prerequisites
 
@@ -426,37 +426,77 @@ const textMessage: TextTokensMessage = {
 await conversationRelaySession.outgoingMessage(textMessage);
 ```
 
-### Enhanced Tool Handling System
+### Tool Type-Driven Architecture
 
-The system implements a sophisticated tool handling mechanism that categorizes tool responses by type:
+The system implements a pure tool type-driven architecture using OutgoingMessage types for routing:
 
-#### Tool Response Types
+#### Tool Categories
 
-1. **tool** - Standard tools that return results to be consumed by the LLM
-2. **crelay** - Conversation Relay specific tools that bypass LLM processing  
-3. **error** - Error handling responses
-4. **llm** - LLM controller responses (reserved for future expansion)
+1. **Generic LLM Tools** - Standard tools processed by OpenAI (e.g., `send-sms`)
+2. **CRelay Tools with Immediate Delivery** - WebSocket tools sent immediately (e.g., `send-dtmf`)  
+3. **CRelay Tools with Delayed Delivery** - Terminal tools sent after OpenAI response (e.g., `end-call`, `live-agent-handoff`)
 
-Tools now use the ToolEvent system to emit events and return simple responses:
+#### Tool Response Patterns
 
+**Generic LLM Tool (send-sms.ts):**
 ```typescript
-export default function (functionArguments: ToolArguments, toolEvent?: ToolEvent): ToolResponse {
+export default async function (functionArguments: SendSMSFunctionArguments): Promise<SendSMSResponse> {
     // Tool logic here
+    const result = await twilioService.sendSMS(args.to, args.message);
     
-    if (toolEvent) {
-        toolEvent.emit('crelay', {
-            type: "action",
-            data: actionData
-        });
-        toolEvent.log(`Action completed: ${JSON.stringify(actionData)}`);
-    }
-    
+    // Return simple response for OpenAI to process
     return {
         success: true,
-        message: "Action completed successfully"
+        message: `SMS sent successfully`,
+        recipient: args.to
     };
 }
 ```
+
+**CRelay Tool with Immediate Delivery (send-dtmf.ts):**
+```typescript
+import { SendDigitsMessage } from '../interfaces/ConversationRelay.js';
+
+export default function (functionArguments: SendDTMFFunctionArguments): SendDTMFResponse {
+    return {
+        success: true,
+        message: `DTMF digits sent successfully`,
+        digits: functionArguments.dtmfDigit,
+        outgoingMessage: {
+            type: "sendDigits",
+            digits: functionArguments.dtmfDigit
+        } as SendDigitsMessage
+    };
+}
+```
+
+**CRelay Tool with Delayed Delivery (end-call.ts):**
+```typescript
+import { EndSessionMessage } from '../interfaces/ConversationRelay.js';
+
+export default function (functionArguments: EndCallFunctionArguments): EndCallResponse {
+    return {
+        success: true,
+        message: `Call ended successfully`,
+        summary: functionArguments.summary,
+        outgoingMessage: {
+            type: "end",
+            handoffData: JSON.stringify({
+                reasonCode: "end-call",
+                reason: "Ending the call",
+                conversationSummary: functionArguments.summary
+            })
+        } as EndSessionMessage
+    };
+}
+```
+
+#### Type-Driven Routing
+
+ConversationRelayService routes based on `outgoingMessage.type`:
+- **`sendDigits`, `play`, `language`** - Immediate WebSocket delivery
+- **`end`** - Stored and sent after OpenAI response completion
+- **`text`** or no outgoingMessage - Standard OpenAI processing
 
 ### Interrupt Handling
 

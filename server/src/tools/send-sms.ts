@@ -1,7 +1,6 @@
 /**
- * Send SMS function - simplified to return standard responses without tool types
- * This tool doesn't need to emit events since it's a standard operation that just
- * returns results for the conversation context.
+ * Send SMS function - returns standard responses for conversation context.
+ * This is a generic LLM tool that OpenAI processes normally.
  */
 import { logOut, logError } from '../utils/logger.js';
 import { TwilioService } from '../services/TwilioService.js';

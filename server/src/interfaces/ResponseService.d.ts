@@ -41,8 +41,8 @@ export interface ContentResponse {
  * Interface for tool result events
  */
 export interface ToolResultEvent {
-    toolType: string;  // "crelay" for ConversationRelay-specific tools
-    toolData: any;     // The actual tool response data
+    toolType: string;  // The tool name (e.g., "send-dtmf", "live-agent-handoff", "send-sms")
+    toolData: ToolResult; // The complete tool result including outgoingMessage for CRelay tools
 }
 
 /**
@@ -51,7 +51,6 @@ export interface ToolResultEvent {
 export interface ToolResult {
     success: boolean;
     message: string;
-    crelayData?: any; // Optional conversation relay data for WebSocket routing
     [key: string]: any; // Allows additional properties like digits, recipient, summary, etc.
 }
 

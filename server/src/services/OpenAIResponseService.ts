@@ -156,11 +156,11 @@ class OpenAIResponseService implements ResponseService {
             // Call the tool with arguments only
             const toolResponse: ToolResult = await calledTool(calledToolArgs);
 
-            // Check if tool returned crelay data and route it through DI
-            if (toolResponse && (toolResponse as any).crelayData) {
+            // Always pass tool results to higher-level service for processing
+            if (toolResponse) {
                 this.responseHandler.toolResult({
-                    toolType: 'crelay',
-                    toolData: (toolResponse as any).crelayData
+                    toolType: tool.name,
+                    toolData: toolResponse
                 } as ToolResultEvent);
             }
 
@@ -435,7 +435,7 @@ class OpenAIResponseService implements ResponseService {
 
                 case 'response.completed':
 
-                    // Only emit final content marker if this is the end of the conversation
+                    // Only send final content marker if this is the end of the conversation
                     // (not if we're about to create a follow-up for tool results)
                     if (!currentToolCall) {
                         this.responseHandler.content({
@@ -468,7 +468,7 @@ class OpenAIResponseService implements ResponseService {
      * 
      * == Streaming and Tool Calls ==
      * The Responses API handles streaming responses that may include both content and tool calls:
-     *      1. Content chunks are emitted directly via 'responseService.content' events
+     *      1. Content chunks are passed via responseHandler.content calls
      *      2. Tool call events are processed as they arrive
      *      3. When tool calls are detected, they are executed immediately
      *      4. Tool results are added to input messages and a follow-up response is created
@@ -494,9 +494,9 @@ class OpenAIResponseService implements ResponseService {
      * @param {string} role - Message role ('user' or 'system')
      * @param {string} prompt - Input message content
      * @throws {Error} If response generation fails
-     * @emits responseService.content
-     * @emits responseService.toolResult
-     * @emits responseService.error
+     * @calls responseHandler.content for streaming response chunks
+     * @calls responseHandler.toolResult for tool execution results
+     * @calls responseHandler.error for error events
      */
     async generateResponse(role: 'user' | 'system' = 'user', prompt: string): Promise<void> {
         this.isInterrupted = false;
