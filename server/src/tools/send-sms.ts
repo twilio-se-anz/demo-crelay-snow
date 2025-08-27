@@ -15,14 +15,6 @@ interface SendSMSFunctionArguments {
     [key: string]: any;
 }
 
-/**
- * Interface for the tool event (passed by ResponseService)
- */
-interface ToolEvent {
-    emit: (eventType: string, data: any) => void;
-    log: (message: string) => void;
-    logError: (message: string) => void;
-}
 
 /**
  * Interface for the response object - simplified
@@ -38,12 +30,11 @@ interface SendSMSResponse {
  * Now returns a simple response that gets inserted into conversation context
  * 
  * @param functionArguments - The arguments for the send SMS function
- * @param toolEvent - Tool event for logging (provided by ResponseService)
  * @returns A simple response object for conversation context
  */
-export default async function (functionArguments: SendSMSFunctionArguments, toolEvent?: ToolEvent): Promise<SendSMSResponse> {
-    const log = toolEvent?.log || ((msg: string) => logOut('SendSMS', msg));
-    const logError_ = toolEvent?.logError || ((msg: string) => logError('SendSMS', msg));
+export default async function (functionArguments: SendSMSFunctionArguments): Promise<SendSMSResponse> {
+    const log = (msg: string) => logOut('SendSMS', msg);
+    const logError_ = (msg: string) => logError('SendSMS', msg);
 
     log(`Send SMS function called with arguments: ${JSON.stringify(functionArguments)}`);
 

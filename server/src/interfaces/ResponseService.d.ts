@@ -51,6 +51,7 @@ export interface ToolResultEvent {
 export interface ToolResult {
     success: boolean;
     message: string;
+    crelayData?: any; // Optional conversation relay data for WebSocket routing
     [key: string]: any; // Allows additional properties like digits, recipient, summary, etc.
 }
 

@@ -9,50 +9,38 @@ interface SendDTMFFunctionArguments {
 }
 
 /**
- * Interface for the tool event (passed by ResponseService)
- */
-interface ToolEvent {
-    emit: (eventType: string, data: any) => void;
-    log: (message: string) => void;
-    logError: (message: string) => void;
-}
-
-/**
  * Interface for the response object - simple response for conversation
  */
 interface SendDTMFResponse {
     success: boolean;
     message: string;
     digits: string;
+    crelayData?: {
+        type: "sendDigits";
+        digits: string;
+    };
 }
 
 /**
  * Sends DTMF digits via WebSocket and returns conversation context
  * 
  * @param functionArguments - The arguments for the send DTMF function
- * @param toolEvent - Tool event for emitting events (provided by ResponseService)
- * @returns Simple response for conversation context
+ * @returns Simple response for conversation context with crelay data for WebSocket routing
  */
-export default function (functionArguments: SendDTMFFunctionArguments, toolEvent?: ToolEvent): SendDTMFResponse {
+export default function (functionArguments: SendDTMFFunctionArguments): SendDTMFResponse {
     logOut('SendDTMF', `Send dtmf function called with arguments: ${JSON.stringify(functionArguments)}`);
 
-    // If toolEvent is available, emit the DTMF event for WebSocket transmission
-    if (toolEvent) {
-        const dtmfData = {
-            type: "sendDigits",
-            digits: functionArguments.dtmfDigit
-        };
+    const dtmfData = {
+        type: "sendDigits" as const,
+        digits: functionArguments.dtmfDigit
+    };
 
-        // Emit using "crelay" type so ConversationRelay handles it
-        toolEvent.emit('crelay', dtmfData);
-        toolEvent.log(`Emitted DTMF event: ${JSON.stringify(dtmfData)}`);
-    }
-
-    // Return simple response for conversation context
+    // Return response with both conversation context and crelay data
     const response: SendDTMFResponse = {
         success: true,
         message: `DTMF digits sent successfully`,
-        digits: functionArguments.dtmfDigit
+        digits: functionArguments.dtmfDigit,
+        crelayData: dtmfData
     };
 
     logOut('SendDTMF', `Send DTMF response: ${JSON.stringify(response)}`);

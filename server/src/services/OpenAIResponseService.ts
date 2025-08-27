@@ -68,18 +68,10 @@ import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, Response
 dotenv.config();
 
 
-// ToolEvent interface for tool execution context. This is used by tools to emit events
-interface ToolEvent {
-    emit: (eventType: string, data: any) => void;
-    log: (message: string) => void;
-    logError: (message: string) => void;
-}
-
-
 /**
  * Type for loaded tool function
  */
-type ToolFunction = (args: any, toolEvent?: ToolEvent) => Promise<ToolResult> | ToolResult;
+type ToolFunction = (args: any) => Promise<ToolResult> | ToolResult;
 
 /**
  * Interface for tool call from streaming events
@@ -149,21 +141,6 @@ class OpenAIResponseService implements ResponseService {
         this.responseHandler = handler;
     }
 
-    /**
-     * Creates a ToolEvent object that tools can use to emit events
-     */
-    private createToolEvent(): ToolEvent {
-        return {
-            emit: (eventType: string, data: any) => {
-                this.responseHandler.toolResult({
-                    toolType: eventType,
-                    toolData: data
-                } as ToolResultEvent);
-            },
-            log: (message: string) => logOut('Tool', message),
-            logError: (message: string) => logError('Tool', message)
-        };
-    }
 
     /**
     * Executes a tool call with proper type safety
@@ -176,11 +153,16 @@ class OpenAIResponseService implements ResponseService {
             const calledTool: ToolFunction = this.loadedTools[tool.name];
             const calledToolArgs = JSON.parse(tool.arguments);
 
-            // Create ToolEvent for the tool
-            const toolEvent = this.createToolEvent();
+            // Call the tool with arguments only
+            const toolResponse: ToolResult = await calledTool(calledToolArgs);
 
-            // Call the tool with both arguments and toolEvent
-            const toolResponse: ToolResult = await calledTool(calledToolArgs, toolEvent);
+            // Check if tool returned crelay data and route it through DI
+            if (toolResponse && (toolResponse as any).crelayData) {
+                this.responseHandler.toolResult({
+                    toolType: 'crelay',
+                    toolData: (toolResponse as any).crelayData
+                } as ToolResultEvent);
+            }
 
             return toolResponse;
         } catch (error) {

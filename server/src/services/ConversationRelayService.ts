@@ -70,7 +70,7 @@
 
 import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
-import { ResponseService } from '../interfaces/ResponseService.js';
+import { ContentResponse, ResponseService, ToolResultEvent } from '../interfaces/ResponseService.js';
 import { OpenAIResponseService } from './OpenAIResponseService.js';
 import { ConversationRelayHandler } from '../interfaces/ConversationRelay.js';
 import { ResponseHandler } from '../interfaces/ResponseService.js';
@@ -100,7 +100,7 @@ class ConversationRelayService implements ConversationRelay {
         this.silenceHandler = new SilenceHandler();
         this.logMessage = null;     // Utility log message
         this.accumulatedTokens = '';// Utility to show tokens as a Message in logging
-        
+
         logOut(`Conversation Relay`, `Service constructed`);
     }
 
@@ -109,7 +109,7 @@ class ConversationRelayService implements ConversationRelay {
      */
     private createResponseHandler(): ResponseHandler {
         return {
-            content: (response) => {
+            content: (response: ContentResponse) => {
                 if (!response.last) {
                     // Accumulate tokens while last is false
                     this.accumulatedTokens += response.token || '';
@@ -129,7 +129,7 @@ class ConversationRelayService implements ConversationRelay {
                 this.conversationRelayHandler.outgoingMessage(outgoingMessage);
             },
 
-            toolResult: (toolResult) => {
+            toolResult: (toolResult: ToolResultEvent) => {
                 logOut(`Conversation Relay`, `Tool result received: ${JSON.stringify(toolResult)}`);
                 // Check if the tool result is for the conversation relay
                 if (toolResult.toolType === "crelay") {
@@ -138,12 +138,12 @@ class ConversationRelayService implements ConversationRelay {
                 }
             },
 
-            error: (error) => {
+            error: (error: Error) => {
                 logError(`Conversation Relay`, `ResponseService error: ${error.message}`);
                 // Could emit an error event or handle it appropriately
             },
 
-            callSid: (callSid, responseMessage) => {
+            callSid: (callSid: string, responseMessage: any) => {
                 logOut('Conversation Relay', `Got a call SID event: ${callSid}, ${JSON.stringify(responseMessage)}`);
                 this.conversationRelayHandler.callSid(callSid, responseMessage);
             }
@@ -179,7 +179,7 @@ class ConversationRelayService implements ConversationRelay {
         try {
             const responseService = await OpenAIResponseService.create(contextFile, toolManifestFile);
             const instance = new ConversationRelayService(responseService, sessionData);
-            
+
             // Create and set up the response handler
             const responseHandler = instance.createResponseHandler();
             responseService.createResponseHandler(responseHandler);

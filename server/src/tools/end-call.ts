@@ -9,54 +9,42 @@ interface EndCallFunctionArguments {
 }
 
 /**
- * Interface for the tool event (passed by ResponseService)
- */
-interface ToolEvent {
-    emit: (eventType: string, data: any) => void;
-    log: (message: string) => void;
-    logError: (message: string) => void;
-}
-
-/**
  * Interface for the response object - simple response for conversation
  */
 interface EndCallResponse {
     success: boolean;
     message: string;
     summary: string;
+    crelayData?: {
+        type: "end";
+        handoffData: string;
+    };
 }
 
 /**
  * Ends the call with a summary and triggers call termination via WebSocket
  * 
  * @param functionArguments - The arguments for the end call function
- * @param toolEvent - Tool event for emitting events (provided by ResponseService)
- * @returns Simple response for conversation context
+ * @returns Simple response for conversation context with crelay data for WebSocket routing
  */
-export default function (functionArguments: EndCallFunctionArguments, toolEvent?: ToolEvent): EndCallResponse {
+export default function (functionArguments: EndCallFunctionArguments): EndCallResponse {
     logOut('EndCall', `End call function called with arguments: ${JSON.stringify(functionArguments)}`);
 
-    // If toolEvent is available, emit the end call event for WebSocket transmission
-    if (toolEvent) {
-        const endCallData = {
-            type: "end",
-            handoffData: JSON.stringify({
-                reasonCode: "end-call",
-                reason: "Ending the call",
-                conversationSummary: functionArguments.summary,
-            })
-        };
+    const endCallData = {
+        type: "end" as const,
+        handoffData: JSON.stringify({
+            reasonCode: "end-call",
+            reason: "Ending the call",
+            conversationSummary: functionArguments.summary,
+        })
+    };
 
-        // Emit using "crelay" type so ConversationRelay handles it
-        toolEvent.emit('crelay', endCallData);
-        toolEvent.log(`Emitted end call event: ${JSON.stringify(endCallData)}`);
-    }
-
-    // Return simple response for conversation context
+    // Return response with both conversation context and crelay data
     const response: EndCallResponse = {
         success: true,
         message: `Call ended successfully`,
-        summary: functionArguments.summary
+        summary: functionArguments.summary,
+        crelayData: endCallData
     };
 
     logOut('EndCall', `End call response: ${JSON.stringify(response)}`);
