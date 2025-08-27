@@ -28,6 +28,7 @@ interface LiveAgentHandoffResponse {
   sentiment?: string;
   incident_sys_id?: string;
   interaction_sys_id?: string;
+  ticketNumber?: string;
 }
 
 /**

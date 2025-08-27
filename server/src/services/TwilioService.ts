@@ -135,7 +135,9 @@ class TwilioService extends EventEmitter {
 
       // Generate the Twiml we will need once the call is connected. Note, this could be done in two steps via the server, were we set a url: instead of twiml:, but this just seemed overly complicated.
       const response: VoiceResponse = new twilio.twiml.VoiceResponse();
-      const connect: VoiceResponse.Connect = response.connect();
+      const connect: VoiceResponse.Connect = response.connect({
+        action: `https://${serverBaseUrl}/handoff`,
+      });
       const conversationRelay: VoiceResponse.ConversationRelay =
         connect.conversationRelay({
           url: `wss://${serverBaseUrl}/conversation-relay`,

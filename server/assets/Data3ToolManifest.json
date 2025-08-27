@@ -42,9 +42,19 @@
           "sentiment": {
             "type": "string",
             "description": "The sentiment of the customer before the request to speak to a live agent. This is always a string with one of the following values: positive, negative or neutral."
+          },
+          "ticketNumber": {
+            "type": "string",
+            "description": "Service Now ticket number. Starts with INC"
           }
         },
-        "required": ["incident_sys_id", "callSid", "callSummary", "sentiment"]
+        "required": [
+          "incident_sys_id",
+          "callSid",
+          "callSummary",
+          "sentiment",
+          "ticketNumber"
+        ]
       },
       "strict": false
     },
