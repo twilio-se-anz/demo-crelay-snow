@@ -16,6 +16,7 @@ import { ConversationRelayService } from "./services/ConversationRelayService.js
 import { OpenAIService } from "./services/OpenAIService.js";
 import { DeepSeekService } from "./services/DeepSeekService.js";
 import { TwilioService } from "./services/TwilioService.js";
+import VoiceResponse from "twilio/lib/twiml/VoiceResponse.js";
 
 // Define interfaces for session data
 interface SessionData {
@@ -258,6 +259,35 @@ app.ws("/conversation-relay", (ws: any, req: express.Request) => {
  */
 app.get("/", (req: express.Request, res: express.Response) => {
   res.send("WebSocket Server Running");
+});
+
+/**
+ * Basic health check endpoint to verify server status.
+ *
+ * @name GET /
+ * @function
+ * @param {express.Request} req - Express request object
+ * @param {express.Response} res - Express response object
+ * @returns {string} Simple text response indicating server is running
+ */
+app.post("/handoff", (req: express.Request, res: express.Response) => {
+  console.log("Incoming handoff request", req.body);
+
+  const HandoffData = JSON.parse(req.body.HandoffData);
+  const response = new VoiceResponse();
+  const taskAttributesJson = {
+    ...HandoffData,
+  };
+
+  response
+    .enqueue({
+      workflowSid: process.env.WORKFLOW_SID,
+    })
+    .task({}, JSON.stringify(taskAttributesJson));
+
+  console.log("Sending handoff response", response.toString());
+
+  res.send(response.toString());
 });
 
 /**

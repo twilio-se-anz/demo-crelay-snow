@@ -23,12 +23,28 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "summary": {
+          "incident_sys_id": {
             "type": "string",
-            "description": "As summary of the call"
+            "description": "Service Now sys_id or ticket number. Usually in format INC"
+          },
+          "interaction_sys_id": {
+            "type": "string",
+            "description": "Service Now sys_id for the interaction"
+          },
+          "callSid": {
+            "type": "string",
+            "description": "The unique identifier for the active phone call."
+          },
+          "callSummary": {
+            "type": "string",
+            "description": "The summary of the call before the request to speak to a live agent."
+          },
+          "sentiment": {
+            "type": "string",
+            "description": "The sentiment of the customer before the request to speak to a live agent. This is always a string with one of the following values: positive, negative or neutral."
           }
         },
-        "required": ["summary"]
+        "required": ["incident_sys_id", "callSid", "callSummary", "sentiment"]
       },
       "strict": false
     },
