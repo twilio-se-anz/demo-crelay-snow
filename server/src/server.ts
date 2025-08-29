@@ -113,7 +113,7 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
                 }
 
                 // This loads the initial context and manifest either as parameters, env or default.
-                const contextFile: string = message.customParameters?.contextFile || process.env.LLM_CONTEXT || 'defaultContext.md';
+                const contextFile: string = message.customParameters?.contextFile || process.env.LLM_CONTEXT || 'Data3Context.md';
                 const toolManifestFile: string = message.customParameters?.toolManifestFile || process.env.LLM_MANIFEST || 'defaultToolManifest.json';
 
                 logOut('WS', `Creating ConversationRelayService`);
@@ -337,6 +337,72 @@ app.post('/updateResponseService', async (req: express.Request, res: express.Res
     }
 
     res.json({ success: true });
+});
+
+/**
+ * Endpoint to receive Voice Intelligence webhooks from Twilio.
+ * Processes the webhook data and inserts relevant information into active conversation sessions.
+ */
+app.post('/voiceIntelligenceWebhook', async (req: express.Request, res: express.Response) => {
+    const webhookData = req.body;
+    const callSid = webhookData.CallSid;
+    
+    logOut('Server', `Received Voice Intelligence webhook for call SID: ${callSid}`);
+
+    try {
+        // Get the session from the wsSessionsMap
+        const wsSession = wsSessionsMap.get(callSid);
+
+        if (wsSession) {
+            const conversationRelaySession = wsSession.conversationRelaySession;
+            
+            // Process the webhook using TwilioService
+            const processedData = await twilioService.processVoiceIntelligenceWebhook(webhookData);
+            
+            // Insert processed data into conversation if available
+            if (processedData) {
+                await conversationRelaySession.insertMessage('system', `Voice Intelligence Analysis: ${JSON.stringify(processedData)}`);
+            }
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        logError('Server', `Error processing Voice Intelligence webhook: ${error instanceof Error ? error.message : String(error)}`);
+        res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    }
+});
+
+/**
+ * Endpoint to receive Call Recording webhooks from Twilio.
+ * Processes the webhook data and inserts recording information into active conversation sessions.
+ */
+app.post('/callRecordingWebhook', async (req: express.Request, res: express.Response) => {
+    const webhookData = req.body;
+    const callSid = webhookData.CallSid;
+    
+    logOut('Server', `Received Call Recording webhook for call SID: ${callSid}`);
+
+    try {
+        // Get the session from the wsSessionsMap
+        const wsSession = wsSessionsMap.get(callSid);
+
+        if (wsSession) {
+            const conversationRelaySession = wsSession.conversationRelaySession;
+            
+            // Process the webhook using TwilioService
+            const processedData = await twilioService.processCallRecordingWebhook(webhookData);
+            
+            // Insert processed data into conversation if available
+            if (processedData) {
+                await conversationRelaySession.insertMessage('system', `Call Recording Available: ${JSON.stringify(processedData)}`);
+            }
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        logError('Server', `Error processing Call Recording webhook: ${error instanceof Error ? error.message : String(error)}`);
+        res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    }
 });
 
 /****************************************************

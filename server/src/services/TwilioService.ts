@@ -155,6 +155,130 @@ class TwilioService extends EventEmitter {
             return null;
         }
     }
+
+    /**
+     * Sends a verification code via SMS or voice call using Twilio Verify.
+     * 
+     * @param {string} to - The phone number to send verification to in E.164 format
+     * @param {string} channel - The channel to use: 'sms' or 'call'
+     * @returns {Promise<string|null>} The verification SID if successful, null if sending fails
+     */
+    async sendVerification(to: string, channel: string = 'sms'): Promise<string | null> {
+        try {
+            const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
+            if (!serviceSid) {
+                throw new Error('TWILIO_VERIFY_SERVICE_SID environment variable not set');
+            }
+
+            logOut('TwilioService', `Sending verification via ${channel} to: ${to}`);
+
+            const verification = await this.twilioClient.verify.v2.services(serviceSid)
+                .verifications
+                .create({
+                    to: to,
+                    channel: channel as 'sms' | 'call'
+                });
+
+            logOut('TwilioService', `Verification sent with SID: ${verification.sid}`);
+            return verification.sid;
+
+        } catch (error) {
+            logError('TwilioService', `Error sending verification: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Checks a verification code using Twilio Verify.
+     * 
+     * @param {string} to - The phone number the verification was sent to in E.164 format
+     * @param {string} code - The verification code to check
+     * @returns {Promise<boolean>} True if verification is successful, false otherwise
+     */
+    async checkVerification(to: string, code: string): Promise<boolean> {
+        try {
+            const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
+            if (!serviceSid) {
+                throw new Error('TWILIO_VERIFY_SERVICE_SID environment variable not set');
+            }
+
+            logOut('TwilioService', `Checking verification code for: ${to}`);
+
+            const verificationCheck = await this.twilioClient.verify.v2.services(serviceSid)
+                .verificationChecks
+                .create({
+                    to: to,
+                    code: code
+                });
+
+            const isValid = verificationCheck.status === 'approved';
+            logOut('TwilioService', `Verification check result: ${isValid ? 'approved' : 'denied'}`);
+            return isValid;
+
+        } catch (error) {
+            logError('TwilioService', `Error checking verification: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
+    }
+
+    /**
+     * Processes Voice Intelligence webhook data.
+     * 
+     * @param {any} webhookData - The Voice Intelligence webhook payload
+     * @returns {Promise<any>} Processed webhook data or null if processing fails
+     */
+    async processVoiceIntelligenceWebhook(webhookData: any): Promise<any> {
+        try {
+            logOut('TwilioService', `Processing Voice Intelligence webhook: ${JSON.stringify(webhookData)}`);
+            
+            // Extract relevant data from the webhook
+            const processedData = {
+                callSid: webhookData.CallSid,
+                transcript: webhookData.Transcript,
+                sentimentScore: webhookData.SentimentScore,
+                operatorResults: webhookData.OperatorResults,
+                timestamp: webhookData.Timestamp,
+                processed: true
+            };
+
+            logOut('TwilioService', `Voice Intelligence data processed for call: ${processedData.callSid}`);
+            return processedData;
+
+        } catch (error) {
+            logError('TwilioService', `Error processing Voice Intelligence webhook: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Processes Call Recording webhook data.
+     * 
+     * @param {any} webhookData - The Call Recording webhook payload
+     * @returns {Promise<any>} Processed webhook data or null if processing fails
+     */
+    async processCallRecordingWebhook(webhookData: any): Promise<any> {
+        try {
+            logOut('TwilioService', `Processing Call Recording webhook: ${JSON.stringify(webhookData)}`);
+            
+            // Extract relevant data from the webhook
+            const processedData = {
+                callSid: webhookData.CallSid,
+                recordingSid: webhookData.RecordingSid,
+                recordingUrl: webhookData.RecordingUrl,
+                duration: webhookData.RecordingDuration,
+                status: webhookData.RecordingStatus,
+                timestamp: webhookData.Timestamp,
+                processed: true
+            };
+
+            logOut('TwilioService', `Call Recording data processed for call: ${processedData.callSid}`);
+            return processedData;
+
+        } catch (error) {
+            logError('TwilioService', `Error processing Call Recording webhook: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
 }
 
 export { TwilioService };

@@ -1,0 +1,331 @@
+{
+    "tools": [
+        {
+            "type": "function",
+            "name": "end-call",
+            "description": "end this call now",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "conversationSummary": {
+                        "type": "string",
+                        "description": "A summary of the call"
+                    }
+                },
+                "required": [
+                    "conversationSummary"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "live-agent-handoff",
+            "description": "Transfers the call to a human agent",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "incident_sys_id": {
+                        "type": "string",
+                        "description": "Service Now sys_id or ticket number. Usually in format INC"
+                    },
+                    "interaction_sys_id": {
+                        "type": "string",
+                        "description": "Service Now sys_id for the interaction"
+                    },
+                    "callSid": {
+                        "type": "string",
+                        "description": "The unique identifier for the active phone call."
+                    },
+                    "callSummary": {
+                        "type": "string",
+                        "description": "The summary of the call before the request to speak to a live agent."
+                    },
+                    "sentiment": {
+                        "type": "string",
+                        "description": "The sentiment of the customer before the request to speak to a live agent. This is always a string with one of the following values: positive, negative or neutral."
+                    },
+                    "ticketNumber": {
+                        "type": "string",
+                        "description": "Service Now ticket number. Starts with INC"
+                    }
+                },
+                "required": [
+                    "incident_sys_id",
+                    "callSid",
+                    "callSummary",
+                    "sentiment",
+                    "ticketNumber"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "send-dtmf",
+            "description": "This sends DTMF tones to the call",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dtmfDigit": {
+                        "type": "string",
+                        "description": "The DTMF digit value to send"
+                    }
+                },
+                "required": [
+                    "dtmfDigit"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "send-verification",
+            "description": "Sends an OTP verification code to a phone number via SMS or voice call",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "The phone number to send the verification code to (in E.164 format)"
+                    },
+                    "channel": {
+                        "type": "string",
+                        "description": "The channel to send verification code via",
+                        "enum": [
+                            "sms",
+                            "call"
+                        ]
+                    }
+                },
+                "required": [
+                    "to"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "check-verification",
+            "description": "Verifies an OTP code entered by the customer",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "The phone number that received the verification code (in E.164 format)"
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "The verification code entered by the customer"
+                    }
+                },
+                "required": [
+                    "to",
+                    "code"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "get-servicenow-ticket",
+            "description": "Retrieves ticket information from ServiceNow including status, priority, assignment, and details",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticketNumber": {
+                        "type": "string",
+                        "description": "The ServiceNow ticket number (e.g., INC0000123)"
+                    }
+                },
+                "required": [
+                    "ticketNumber"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "lookup-customer",
+            "description": "Looks up customer information and open tickets in ServiceNow using their phone number for proactive customer identification",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phoneNumber": {
+                        "type": "string",
+                        "description": "The customer's phone number to search for in ServiceNow (any format accepted)"
+                    }
+                },
+                "required": [
+                    "phoneNumber"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "create-servicenow-ticket",
+            "description": "Creates a new incident ticket in ServiceNow with proper categorization and caller assignment",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "shortDescription": {
+                        "type": "string",
+                        "description": "Brief summary of the issue (required)"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed description of the issue (required)"
+                    },
+                    "callerSysId": {
+                        "type": "string",
+                        "description": "The sys_id of the caller (required) - obtained from the lookup-customer tool"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "Priority level of the ticket",
+                        "enum": [
+                            "1",
+                            "2",
+                            "3",
+                            "4",
+                            "5"
+                        ]
+                    },
+                    "urgency": {
+                        "type": "string",
+                        "description": "Urgency level of the ticket",
+                        "enum": [
+                            "1",
+                            "2",
+                            "3"
+                        ]
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Category of the issue (e.g., Software, Hardware, Network)"
+                    },
+                    "subcategory": {
+                        "type": "string",
+                        "description": "Subcategory of the issue for more specific classification"
+                    },
+                    "contactType": {
+                        "type": "string",
+                        "description": "How the customer contacted us",
+                        "enum": [
+                            "phone",
+                            "email",
+                            "walk-in",
+                            "self-service"
+                        ]
+                    },
+                    "workNotes": {
+                        "type": "string",
+                        "description": "Initial work notes from the virtual assistant interaction"
+                    },
+                    "parentCase": {
+                        "type": "string",
+                        "description": "Parent incident number if this is a related/child ticket"
+                    }
+                },
+                "required": [
+                    "shortDescription",
+                    "description",
+                    "callerSysId"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "update-servicenow-ticket",
+            "description": "Updates an existing incident ticket in ServiceNow with work notes, status changes, priority updates, and other modifications",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticketNumber": {
+                        "type": "string",
+                        "description": "The ServiceNow ticket number to update (required)"
+                    },
+                    "workNotes": {
+                        "type": "string",
+                        "description": "Work notes to add to the ticket documenting actions taken or information gathered"
+                    },
+                    "state": {
+                        "type": "string",
+                        "description": "New state for the ticket",
+                        "enum": [
+                            "1",
+                            "2",
+                            "3",
+                            "6",
+                            "7",
+                            "8"
+                        ]
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "Updated priority level",
+                        "enum": [
+                            "1",
+                            "2",
+                            "3",
+                            "4",
+                            "5"
+                        ]
+                    },
+                    "urgency": {
+                        "type": "string",
+                        "description": "Updated urgency level",
+                        "enum": [
+                            "1",
+                            "2",
+                            "3"
+                        ]
+                    },
+                    "closeCode": {
+                        "type": "string",
+                        "description": "Close code (REQUIRED when changing state to Resolved/6 or Closed/7)",
+                        "enum": [
+                            "Duplicate",
+                            "Known error",
+                            "No resolution provided",
+                            "Resolved by caller",
+                            "Resolved by change",
+                            "Resolved by problem",
+                            "Resolved by request",
+                            "Solution provided",
+                            "Workaround provided",
+                            "User error"
+                        ]
+                    },
+                    "resolutionNotes": {
+                        "type": "string",
+                        "description": "Resolution notes explaining how the issue was resolved (recommended when closing/resolving tickets)"
+                    },
+                    "assignedTo": {
+                        "type": "string",
+                        "description": "User to assign the ticket to"
+                    },
+                    "assignmentGroup": {
+                        "type": "string",
+                        "description": "Group to assign the ticket to"
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Updated category classification"
+                    },
+                    "subcategory": {
+                        "type": "string",
+                        "description": "Updated subcategory classification"
+                    }
+                },
+                "required": [
+                    "ticketNumber"
+                ]
+            },
+            "strict": false
+        }
+    ]
+}

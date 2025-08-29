@@ -1,0 +1,22 @@
+{
+  "name": "plugin-servicenow-openframe",
+  "version": "1.0.0",
+  "description": "ServiceNow OpenFrame plugin for Conversation Relay",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "servicenow",
+    "openframe", 
+    "conversation-relay",
+    "twilio"
+  ],
+  "author": "Conversation Relay Team",
+  "license": "MIT"
+}
