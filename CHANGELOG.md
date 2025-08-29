@@ -1,5 +1,57 @@
 # Changelog
 
+## Release v4.3.1
+
+### Complete CCRelay Method Support
+
+#### Added Remaining Twilio WebSocket Message Types
+- **switch-language Tool**: Implemented support for dynamic language switching during calls
+  - Takes optional `ttsLanguage` and `transcriptionLanguage` parameters
+  - Validates that at least one language parameter is provided  
+  - Returns `SwitchLanguageMessage` type for WebSocket routing
+  - Supports Twilio's language switching capabilities for both text-to-speech and speech-to-text
+- **play-media Tool**: Added support for playing audio media from URLs
+  - Takes required `source` URL parameter for media playback
+  - Supports optional `loop`, `preemptible`, `interruptible` parameters
+  - Returns `PlayMediaMessage` type for WebSocket routing
+  - Enables playing audio files during conversation sessions
+
+#### Tool Implementation Enhancements
+- **Consistent Tool Patterns**: Both new tools follow established patterns from existing tools
+- **Type Safety**: Proper TypeScript interfaces and validation for all parameters
+- **Error Handling**: Comprehensive validation with descriptive error messages
+- **Logging Integration**: Full logging support using existing logger utilities
+- **OutgoingMessage Integration**: Both tools return proper OutgoingMessage types for WebSocket routing
+
+#### Complete Twilio Coverage
+- **Full API Support**: System now supports all major Twilio Conversation Relay WebSocket message types:
+  - `text` - Text-to-speech synthesis (existing)
+  - `sendDigits` - DTMF tone transmission (existing)  
+  - `end` - Session termination (existing)
+  - `language` - Language switching (new)
+  - `play` - Media playback (new)
+- **Documentation Updates**: Updated README.md to reflect new tools in project structure and tool listings
+- **Consistent Architecture**: All tools follow the same patterns for maintainability and developer experience
+
+### Benefits of Complete CCRelay Support
+
+#### Enhanced Conversation Capabilities
+- **Multi-Language Support**: Dynamic language switching enables serving customers in different languages during the same call
+- **Rich Media Integration**: Audio playback capabilities for playing hold music, announcements, or instructional content
+- **Complete Twilio Integration**: Full utilization of Twilio's Conversation Relay WebSocket API capabilities
+
+#### Developer Experience
+- **Comprehensive Toolset**: All official Twilio Conversation Relay features available as easy-to-use tools
+- **Consistent Patterns**: Predictable tool structure makes it easy to understand and extend functionality
+- **Type-Safe Implementation**: Full TypeScript support with proper interfaces and validation
+
+#### Architectural Benefits
+- **Future-Proof**: Complete API coverage ensures compatibility with Twilio's full feature set
+- **Maintainable**: Consistent tool patterns make the codebase easier to maintain and extend
+- **Well-Documented**: Updated documentation reflects complete tool coverage and usage patterns
+
+This release completes the Twilio Conversation Relay API integration, providing developers with access to all official WebSocket message types through a consistent, type-safe tool interface.
+
 ## Release v4.3.0
 
 ### Tool Type-Driven Architecture Migration

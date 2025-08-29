@@ -2,9 +2,9 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts.
 
-## Release v4.3.0
+## Release v4.3.1
 
-This release completes the migration from event-driven to pure tool type-driven architecture using OutgoingMessage types. The system now uses type-safe routing based on OutgoingMessage types (`sendDigits`, `end`, `text`) instead of generic event handling, with proper timing control for terminal tools to ensure OpenAI responses are delivered before call termination. CRelay-specific tools import OutgoingMessage interfaces while generic LLM tools remain dependency-free, providing clean separation of concerns and enhanced type safety. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
+This release adds complete CRelay method support by implementing the remaining Twilio WebSocket message types. The system now supports all official Twilio Conversation Relay WebSocket messages including `switch-language` for dynamic language switching and `play-media` for audio playback from URLs. These additions provide full coverage of Twilio's Conversation Relay capabilities with proper type safety and consistent tool patterns. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
 ## Prerequisites
 
@@ -43,7 +43,9 @@ This release completes the migration from event-driven to pure tool type-driven 
 │   │   │   ├── end-call.ts
 │   │   │   ├── live-agent-handoff.ts
 │   │   │   ├── send-dtmf.ts
-│   │   │   └── send-sms.ts
+│   │   │   ├── send-sms.ts
+│   │   │   ├── switch-language.ts
+│   │   │   └── play-media.ts
 │   │   └── utils/        # Utility functions
 │   │       └── logger.ts
 ```
@@ -179,6 +181,8 @@ Located in `server/assets/toolManifest.json`, this file defines the tools availa
 2. `live-agent-handoff` - Transfers the call to a human agent
 3. `send-dtmf` - Sends DTMF tones during the call
 4. `send-sms` - Sends SMS messages during the call
+5. `switch-language` - Changes TTS and/or transcription languages
+6. `play-media` - Plays audio media from URLs
 
 ### Dynamic Context System
 
@@ -265,6 +269,8 @@ The server includes several built-in tools for call management:
 2. `live-agent-handoff` - Transfers the call to a human agent  
 3. `send-dtmf` - Sends DTMF tones during the call
 4. `send-sms` - Sends SMS messages during the call
+5. `switch-language` - Changes TTS and/or transcription languages
+6. `play-media` - Plays audio media from URLs
 
 ## Outbound Calling
 
