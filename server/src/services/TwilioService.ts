@@ -1,5 +1,4 @@
 import twilio from 'twilio';
-import { EventEmitter } from 'events';
 import { logOut, logError } from '../utils/logger.js';
 import VoiceResponse from 'twilio/lib/twiml/VoiceResponse.js';
 
@@ -20,14 +19,13 @@ interface StatusCallback {
  * @property {string} fromNumber - Twilio phone number to use as the sender
  * @property {twilio.Twilio} twilioClient - Initialized Twilio client instance
  */
-class TwilioService extends EventEmitter {
+class TwilioService {
     private accountSid: string;
     private authToken: string;
     private fromNumber: string;
     private twilioClient: twilio.Twilio;
 
     constructor() {
-        super();
         this.accountSid = process.env.ACCOUNT_SID || '';
         this.authToken = process.env.AUTH_TOKEN || '';
         this.fromNumber = process.env.FROM_NUMBER || '';

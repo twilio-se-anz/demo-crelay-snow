@@ -1,4 +1,3 @@
-import { EventEmitter } from 'events';
 import { logOut, logError } from '../utils/logger.js';
 
 /**
@@ -60,14 +59,13 @@ interface CustomerResponse {
  * @property {string} username - ServiceNow username from environment variables
  * @property {string} password - ServiceNow password from environment variables
  */
-class ServiceNowService extends EventEmitter {
+class ServiceNowService {
     private instanceUrl: string;
     private username: string;
     private password: string;
     private authHeader: string;
 
     constructor() {
-        super();
         this.instanceUrl = process.env.SERVICENOW_INSTANCE_URL || '';
         this.username = process.env.SERVICENOW_USERNAME || '';
         this.password = process.env.SERVICENOW_PASSWORD || '';
