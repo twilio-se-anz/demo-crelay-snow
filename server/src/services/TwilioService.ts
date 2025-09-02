@@ -149,6 +149,7 @@ class TwilioService extends EventEmitter {
           ttsProvider: "Elevenlabs",
           voice: "Charlie-flash_v2_5",
           dtmfDetection: true, // DTMF & Speech interruptible
+          intelligenceService: process.env.INTELLIGENCE_SERVICE || "",
         } as any);
 
       conversationRelay.parameter({
